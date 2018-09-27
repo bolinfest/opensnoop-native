@@ -339,8 +339,8 @@ int main(int argc, char **argv) {
     generate_trace_entry_pid(trace_entry_insns, opt_pid, hashMapFd);
     numTraceEntryInstructions = NUM_TRACE_ENTRY_PID_INSTRUCTIONS;
   } else {
-    numTraceEntryInstructions = NUM_TRACE_ENTRY_INSTRUCTIONS;
     generate_trace_entry(trace_entry_insns, hashMapFd);
+    numTraceEntryInstructions = NUM_TRACE_ENTRY_INSTRUCTIONS;
   }
 
   entryProgFd = bpf_prog_load(
