@@ -71,7 +71,7 @@ I had never used `syscall(2)` before, but I figured out it was what I needed by 
 
 My next step was to generate the eBPF program. I didn't have to produce an array of binary bytecodes as I expected, but an array of `struct bpf_insn` objects. Honestly, this was easier than producing binary values because I didn't have to worry about the [endianness issues](https://cilium.readthedocs.io/en/v1.2/bpf/#llvm) I read about. Using BCC, [I wrote a Python program to dump the eBPF bytecode from the C version of my program](https://github.com/bolinfest/rust-ebpf-demo/commit/914b24a8c81189d8e278e2e1ce1df53c583f1a5d#diff-3552c49fbb4741b6095394bf1b4086a7) and print it out as an array of `struct bpf_insn` objects:
 
-```
+```py
 import struct
 from bcc import ArgString, BPF
 
@@ -134,7 +134,7 @@ Because this was a one-time conversion, I copied the generated C code into my pr
 
 Incidentally, `bpf_insn` is the first struct I had ever seen that declared fields as nibbles. (For the uninitiated, “nibble” is a real term that is means “4 bits,” so named because it is “half a byte,” get it?) Here is the declaration of the struct:
 
-```
+```c
 struct bpf_insn {
   __u8 code;       // opcode
   __u8 dst_reg:4;  // dest register
@@ -146,7 +146,7 @@ struct bpf_insn {
 
 Note how there is a `:4` after the second two fields, indicating that each field contributes 4 bits. Because the maximum value of 4 (unsigned) bits is 1111 in binary (15 in decimal), then the compiler will complain if you try to assign a value greater than 15 to either `dst_reg` or `src_reg`. To verify the bit representation of the struct, I wrote a small program:
 
-```
+```c
 #include <linux/bpf.h>
 #include <stdio.h>
 
@@ -172,7 +172,7 @@ As you can see, the struct is written as little-endian based on the way the `imm
 
 Incidentally, you are not limited to nibble boundaries when declaring structs (or even requiring all sub-byte fields to be the same type or signed-ness) as I discovered I could also do:
 
-```
+```c
 struct example {
   char f1 : 3;
   char f2 : 3;
@@ -196,7 +196,7 @@ I tried looking in various places for a more detailed error message. I ran `dmes
 
 I was pretty frustrated at this point because my implementation of `bpf_prog_load()` was basically [taken straight from the man page](https://github.com/mkerrisk/man-pages/blob/man-pages-4.15/man2/bpf.2#L724-L742):
 
-```
+```c
 char bpf_log_buf[LOG_BUF_SIZE];
 
 int bpf_prog_load(enum bpf_prog_type type,
@@ -221,7 +221,7 @@ Even though I was using gdb, [I couldn't step into a system call](https://stacko
 
 For whatever reason, I have never looked at the Linux source code before (mostly GPL paranoia, if I'm honest about it). However, [my answer was right there in the code](https://github.com/torvalds/linux/blob/v4.15/kernel/bpf/syscall.c#L1140-L1142), plain as day:
 
-```
+```c
     if (type == BPF_PROG_TYPE_KPROBE &&
         attr->kern_version != LINUX_VERSION_CODE)
         return -EINVAL;
@@ -229,7 +229,7 @@ For whatever reason, I have never looked at the Linux source code before (mostly
 
 As you can see, the sample implementation of `bpf_prog_load()` from the man page makes no mention of `kern_version`, though clearly the Linux kernel will reject your eBPF program with `EINVAL` if `prog_type=BPF_PROG_TYPE_KPROBE` if `kern_version != LINUX_VERSION_CODE`. I then searched the man page for `kern_version`, and there is indeed a note:
 
-```
+```c
 union bpf_attr {
   struct {    /* Used by BPF_MAP_CREATE */
     __u32   map_type;
@@ -269,7 +269,7 @@ I added `#include <linux/version.h>` to the top of my file and set `kern_version
 
 That said, I had misgivings about hardcoding `LINUX_VERSION_CODE` in my source because that meant I could not give the binary version of my program to someone on a slightly different version of the kernel because the version number from my machine would be hardcoded into the binary, causing the version check in a machine with a different kernel to fail. I thought it would be better to calculate the version number dynamically using `uname(2)`; however, I tried running the following on my machine:
 
-```
+```c
 #include <linux/version.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -315,7 +315,7 @@ Unfortunately, my program did not actually do anything because I needed to attac
 
 I made a few typos in the process, so I finally had the bright idea to modify the Python program I used to generate the eBPF bytecode to attach the kprobe:
 
-```
+```py
 # bytecode = bpf.dump_func("trace_entry")
 # print_bpf_insn_struct(bytecode)
 bpf.attach_kprobe(event="do_sys_open", fn_name="trace_entry")
@@ -408,7 +408,7 @@ Because there were only three versions of the filter, I decided to use BCC to cr
 
 Next I wrote some [Python code to post-process the bytecode](https://github.com/bolinfest/opensnoop-native/blob/5295cb008954bfeb7b169a3494d69e12d75b568c/debug.py#L202-L229), generating a C function that would write the appropriate array of `bpf_insn` values to the `struct bpf_insn[]` passed into the function. The key trick was that the Python code to generate the C code would take the original bytecode as well as a “placeholder” argument. For example, when generating the C function to filter by PID, [the “placeholder” argument to the Python function](https://github.com/bolinfest/opensnoop-native/blob/5295cb008954bfeb7b169a3494d69e12d75b568c/opensnoop.py#L94) is:
 
-```
+```py
 {"param_type": "int", "param_name": "pid", "imm": 654321}
 ```
 
@@ -416,7 +416,7 @@ This means that when the Python code is iterating over the bytecode, if it finds
 
 The function prototypes for the C functions that generate the corresponding BPF programs are as follows (the `int fd3` param will be explained in the next section):
 
-```
+```c
 void generate_trace_entry(struct bpf_insn instructions[], int fd3, int fd3);
 void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int fd3);
 void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int fd3);
@@ -424,7 +424,7 @@ void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int fd3);
 
 The [Python code also inserts some constants into the generated C code](https://github.com/bolinfest/opensnoop-native/blob/5295cb008954bfeb7b169a3494d69e12d75b568c/opensnoop.py#L105-L118):
 
-```
+```c
 #define MAX_NUM_TRACE_ENTRY_INSTRUCTIONS 35
 #define NUM_TRACE_ENTRY_INSTRUCTIONS 28
 #define NUM_TRACE_ENTRY_TID_INSTRUCTIONS 32
@@ -448,7 +448,7 @@ With the parameterization problem solved, I was ready to solve the mystery of ho
 
 Perhaps my biggest challenge in this whole process was figuring out how BCC transformed logic in C code for BPF maps into eBPF bytecode. Specifically, figuring out how to associate the declaration of a BPF map with its use:
 
-```
+```c
 BPF_PERF_OUTPUT(events);
 
 int trace_return(struct pt_regs *ctx) {
@@ -460,7 +460,7 @@ int trace_return(struct pt_regs *ctx) {
 
 When looking at this code, my first question was: “What is the `BPF_PERF_OUTPUT` macro doing such that it creates an object named `events` with a `perf_submit()` method that can be called in `trace_return()`?” If you look at [the definition for the macro](https://github.com/iovisor/bcc/blob/f138fea5a9ab279b7347fa6acfd2f53777068b27/src/cc/export/helpers.h#L80-L91), it appears to expand to:
 
-```
+```c
 struct events_table_t {
   int key;
   u32 leaf;
@@ -477,7 +477,7 @@ OK, so `BPF_PERF_OUTPUT(events)` has the side effect of declaring a new struct t
 
 In the BCC repo, I did a search for `maps/perf_output`, which matched [a promising line of code in b_frontend_action.cc](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/src/cc/frontends/clang/b_frontend_action.cc#L1169). From here, I discovered a visitor that would examine section attributes and perform actions based on their contents. In this case, [it would call bpf_create_map() and record the resulting file descriptor as a field of a TableDesc](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/src/cc/frontends/clang/b_frontend_action.cc#L1225-L1227). (I discovered that BPF maps are generally referred to as “tables” in the BCC codebase.) It was also in this file where I found the logic that explained where the `perf_submit()` method came from, as [there was a visitor that rewrote the original call](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/src/cc/frontends/clang/b_frontend_action.cc#L809-L815) as:
 
-```
+```c
 bpf_perf_event_output(
   ctx,
   bpf_pseudo_fd(1, 4),
@@ -488,7 +488,7 @@ bpf_perf_event_output(
 
 Now the `perf_submit()` method had become a pure function! Though this led to new questions, such as, “What is `bpf_pseudo_fd(1, 4)`?” Fortunately, somewhere around here I discovered the various ways to dump debugging info using the Python bindings. For example, if I changed [this line in opensnoop.py](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/tools/opensnoop.py#L135) to the following:
 
-```
+```python
 # initialize BPF
 from bcc import DEBUG_PREPROCESSOR
 b = BPF(text=bpf_text, debug=DEBUG_PREPROCESSOR)
@@ -497,7 +497,7 @@ import sys; sys.exit(0)
 
 Running `sudo ./tools/opensnoop.py`, I got:
 
-```
+```c
 Running from kernel directory at: /lib/modules/4.15.0-33-generic/build
 clang -cc1 -triple x86_64-unknown-linux-gnu -emit-llvm-bc -emit-llvm-uselists -disable-free -disable-llvm-verifier -discard-value-names -main-file-name main.c -mrelocation-model static -mthread-model posix -fmath-errno -masm-verbose -mconstructor-aliases -fuse-init-array -target-cpu x86-64 -dwarf-column-info -debugger-tuning=gdb -momit-leaf-frame-pointer -coverage-notes-file /usr/src/linux-headers-4.15.0-33-generic/main.gcno -nostdsysteminc -nobuiltininc -resource-dir lib/clang/7.0.0 -isystem /virtual/lib/clang/include -include ./include/linux/kconfig.h -include /virtual/include/bcc/bpf.h -include /virtual/include/bcc/helpers.h -isystem /virtual/include -I /home/mbolin/code/bcc -D __BPF_TRACING__ -I ./arch/x86/include -I arch/x86/include/generated/uapi -I arch/x86/include/generated -I include -I ./arch/x86/include/uapi -I arch/x86/include/generated/uapi -I ./include/uapi -I include/generated/uapi -D __KERNEL__ -D __HAVE_BUILTIN_BSWAP16__ -D __HAVE_BUILTIN_BSWAP32__ -D __HAVE_BUILTIN_BSWAP64__ -O2 -Wno-deprecated-declarations -Wno-gnu-variable-sized-type-not-at-end -Wno-pragma-once-outside-header -Wno-address-of-packed-member -Wno-unknown-warning-option -Wno-unused-value -Wno-pointer-sign -fdebug-compilation-dir /usr/src/linux-headers-4.15.0-33-generic -ferror-limit 19 -fmessage-length 109 -fobjc-runtime=gcc -fdiagnostics-show-option -vectorize-loops -vectorize-slp -o main.bc -x c /virtual/main.c -faddrsig
 #if defined(BPF_LICENSE)
@@ -742,7 +742,7 @@ Now I was getting somewhere. I realized that I should use `bpf_create_map()` in 
 
 I thought it was a bit weird that the instructions that were annotated with `ld_pseudo` in the debug output corresponded to things like:
 
-```
+```c
 instructions[18] = (struct bpf_insn) {
   .code    = 0x18,
   .dst_reg = BPF_REG_1,
@@ -766,7 +766,7 @@ With this newfound knowledge, I realized that every bytecode with `opcode=0x18` 
 
 I thought that I was just about done at this point, but it turned out I was wrong. [This small snippet of Python code at the end of opensnoop.py](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/tools/opensnoop.py#L189-L193) would turn out to be a lot of work to port to C:
 
-```
+```python
 # loop with callback to print_event
 b["events"].open_perf_buffer(print_event, page_cnt=64)
 start_time = datetime.now()
@@ -788,7 +788,7 @@ The thing I missed the most from C++ was [RAII](https://en.cppreference.com/w/cp
 
 The thing I missed second most from C++ was the standard library, notably `std::string` and `std::vector`. For example, here is the definition of [a simple utility function from the BCC Python bindings](https://github.com/iovisor/bcc/blob/3d2211632247ad0d1ee9d1ecc1162764322eb974/src/python/bcc/utils.py#L21-L36), `get_online_cpus()`:
 
-```
+```python
 def _read_cpu_range(path):
     cpus = []
     with open(path, 'r') as f:
@@ -809,7 +809,7 @@ def get_online_cpus():
 
 Compare this with the equivalent version I wrote in straight C:
 
-```
+```c
 int getOnlineCpus(int **cpus, size_t *numCpu) {
   int fd = open("/sys/devices/system/cpu/online", O_RDONLY | O_CLOEXEC);
   if (fd < 0) {
