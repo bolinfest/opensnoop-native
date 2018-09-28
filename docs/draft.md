@@ -446,9 +446,6 @@ With the parameterization problem solved, I was ready to solve the mystery of ho
 
 ### Working with BPF Maps
 
-<talk about using the various debug levels to BPF to figure all this out>
-<deducing how maps worked from the bytecode/ld_pseudo>
-
 Perhaps my biggest challenge in this whole process was figuring out how BCC transformed logic in C code for BPF maps into eBPF bytecode. Specifically, figuring out how to associate the declaration of a BPF map with its use:
 
 ```
