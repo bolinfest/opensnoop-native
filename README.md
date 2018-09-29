@@ -3,6 +3,8 @@
 This is a pure C implementation of [opensnoop](
 http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html)
 that uses [eBPF](https://lwn.net/Articles/740157/).
+I put together a [detailed backstory](https://bolinfest.github.io/opensnoop-native/)
+of how this came to be.
 
 The ["official" version of opensnoop that uses eBPF](
 https://github.com/iovisor/bcc/blob/master/tools/opensnoop.py) is written
