@@ -390,6 +390,8 @@ This seemed weird. The `src/cc` folder in the BCC repo was giant, but libbpf was
 
 After quite a bit of digging, I had a new mental model of how the code was organized:
 
+![](images/bcc-deps.png)
+
 This was an important breakthrough because it clarified the difference between libbcc (which is currently [src/cc/api/BPF.cc](https://github.com/iovisor/bcc/blob/3d2211632247ad0d1ee9d1ecc1162764322eb974/src/cc/api/BPF.cc) and [src/cc/api/BPFTable.cc](https://github.com/iovisor/bcc/blob/3d2211632247ad0d1ee9d1ecc1162764322eb974/src/cc/api/BPFTable.cc) and their transitive dependencies) and libbpf for me. (Personally, I would love to see the repo reorganized such that all of the code for libbpf is in its own directory.) In particular, I was now convinced that I could `#include <bcc/libbpf.h>` in my standalone opensnoop without pulling in LLVM.
 
 ### Generating the Bytecode
@@ -785,6 +787,8 @@ It was finally time to declare my program complete!
 Truth be told, this entire project was my first time writing straight C (though I did read quite a bit of it as part of reading [Advanced Programming in the UNIX Environment, 3rd edition](https://amzn.to/2NGuSqQ) cover-to-cover, but that's a story for another blog post). Before I started on [Eden](https://github.com/facebookexperimental/eden) a little over two years ago, I had never written any C or C++ before. Literally zero. Although there were points where it would have been easier to implement opensnoop in C++, I decided to stick it out to get some firsthand experience writing a non-trivial C program.
 
 The thing I missed the most from C++ was [RAII](https://en.cppreference.com/w/cpp/language/raii). That is, I missed being able to leverage the compiler to ensure resources were released reliably. For example, I am used to wrapping a file descriptor with [folly::File](https://github.com/facebook/folly/blob/c09be5f410f6f567a9ec60ab1d898e4998d9cd9d/folly/File.h) to ensure the file descriptor is closed when the `folly::File` goes out of scope, avoiding the need to call `close(2)` explicitly. Instead, I took a cue from `libbpf.c` and used a `goto` for the first time of my life, filling me with trepidation as I could only think of [XKCD 292](https://xkcd.com/292/) the entire time:
+
+![Neal Stephenson thinks it's cute to name his labels 'dengo'](https://imgs.xkcd.com/comics/goto.png)
 
 The thing I missed second most from C++ was the standard library, notably `std::string` and `std::vector`. For example, here is the definition of [a simple utility function from the BCC Python bindings](https://github.com/iovisor/bcc/blob/3d2211632247ad0d1ee9d1ecc1162764322eb974/src/python/bcc/utils.py#L21-L36), `get_online_cpus()`:
 
