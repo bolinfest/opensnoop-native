@@ -65,7 +65,7 @@ These assumptions were not quite correct.
 
 My first surprise was that despite doing `#include <linux/bpf.h>`, there was no `bpf()` function for me to call. Instead, I had to use `syscall(2)` to call `bpf(2)` even though I expected there to be a `bpf()` function available since everything else I ever looked up in [section 2](https://en.wikipedia.org/wiki/Man_page#Manual_sections) had a function of same name:
 
-```
+```c
 syscall(__NR_bpf, BPF_PROG_LOAD, &attr, sizeof(attr));
 ```
 
