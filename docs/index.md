@@ -4,16 +4,16 @@
 
 **tl;dr** *I rewrote [opensnoop](http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html) in [C using eBPF](https://github.com/bolinfest/opensnoop-native/blob/master/opensnoop.c). This is the story of how I broke through layers of abstraction to figure out how to do it.*
 
-Recently, I was trying to debug a performance issue in [Eden](https://github.com/facebookexperimental/) with a coworker. He started spitting out things to try: “run vmstat 1,” “check iostat,” “ok, now mpstat,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
+Recently, I was trying to debug a performance issue in [Eden](https://github.com/facebookexperimental/) with a coworker. He started spitting out things to try: “run `vmstat 1`,” “check `iostat`,” “ok, now `mpstat`,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
 
 Shortly thereafter, I asked myself: “Was I out playing Frisbee in the quad the day they went over Linux performance tools in school? How am I supposed to learn this stuff? Is there one book I can read to learn what I need to know? Why are there so many commands I need to learn?” I asked around and a friend told me to look at <http://brendangregg.com/> to learn about performance engineering.
 
 When you first visit Brendan's site, it's pretty overwhelming. With his long list of articles, talks, books, and of course, software, it's clear that Brendan is incredibly prolific and conscientious about sharing what he knows with everyone. When it comes to learning about computing performance, I haven't found anything that is a close second to Brendan or his web site.
 
-So where to begin? On his [Linux Performance](http://brendangregg.com/linuxperf.html) page, the section on talks is organized “[i]n rough order of recommended viewing or difficulty, intro to more advanced,” so I figured I would start at the top and work my way down, as appropriate.
+So where to begin? On his [Linux Performance](http://brendangregg.com/linuxperf.html) page, the section on talks is organized “[i]n rough order of recommended viewing or difficulty, intro to more advanced,” so I figured I would start at the top and work my way through the list. This led me down an interesting path from which I learned about a number of new topics and was challenged to find answers to questions that couldn't be easily answered by Google or Stack Overflow. In writing this up, I hope it is helpful in teaching about eBPF, problem solving, or both.
 
 * [Part 1: Learning Begins](#part-1-learning-begins)
-* [Part 2: Initial foray into eBPF](#part-2-initial-foray-into-ebpf)
+* [Part 2: Initial Foray into eBPF](#part-2-initial-foray-into-ebpf)
 * [Part 3: Standalone eBPF program without libbpf](#part-3-standalone-ebpf-program-without-libbpf)
   * [Loading the Program](#loading-the-program)
   * [Attaching the kprobe](#attaching-the-kprobe)
@@ -29,16 +29,94 @@ So where to begin? On his [Linux Performance](http://brendangregg.com/linuxperf.
 
 ## Part 1: Learning Begins
 
-**TODO: This section is not done!**
+I started watching Brendan's videos with the goal of learning how to debug performance issues (primarily on Linux). Historically, I have not been as deep in the stack as some of my colleagues, so I know I have some things to work on there and I am often eager to read quality material to help me improve on that front. I also knew enough to know that there are a lot of tools out there, and I only had a passing familiarity with a small handful of them.
 
-Explain what opensnoop is in here: http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html
+Similar to when I was first overwhelmed when learning Git, one of my first thoughts was: "OK, what are the four or five commands I need to know so I can get through the day?" Suffice to say, I was a bit overwhelmed when I first encountered [Brendan's diagram of performance tools to audit the performance of various parts of the system](http://www.brendangregg.com/Perf/linux_perf_tools_full.svg):
+it was clear there weren't going to be any shortcuts here.
 
-* USE method: http://brendangregg.com/usemethod.html
-* Performance checklists: http://www.brendangregg.com/blog/2016-05-04/srecon2016-perf-checklists-for-sres.html
-* eBPF
-* Flame graphs: http://brendangregg.com/flamegraphs.html
+As I watched the videos, I was introduced to [the Utilitization Saturation and Errors
+(USE) Method](http://www.brendangregg.com/usemethod.html), which is a methodology for
+analyzing the performance of a system. The general idea is to create a map of your system, dividing it into functional components (or "resources") and examine each one
+individually for utilization, saturation, and errors. The idea is that by
+examining the components in isolation, you can find the true bottleneck. Because each
+resource often has its own tool for checking its vital signs, you end up having to learn a lot of tools.
 
-## Part 2: Initial foray into eBPF
+Fortunately, in addition to Brendan's comprehensive checklists for various
+platforms ([Linux](http://www.brendangregg.com/USEmethod/use-linux.html),
+[Solaris](http://www.brendangregg.com/USEmethod/use-solaris.html),
+[macOS](http://www.brendangregg.com/USEmethod/use-macosx.html),
+[FreeBSD](http://www.brendangregg.com/USEmethod/use-freebsd.html)),
+he has mercifully put together some simpler lists for those of us with
+shorter attention spans, such as [Linux Perf Analysis in 60s](
+http://www.brendangregg.com/blog/2016-05-04/srecon2016-perf-checklists-for-sres.html),
+which is a "Top 10" list of commands to run from the command line.
+This seemed like a good place to start to build up some basic competency before
+branching out further.
+
+Unsurprisingly, Brendan has created and released a number of performance analysis tools.
+One that is incredibly easy to explain and demos well (so it is frequently
+featured in his talks) is [opensnoop](http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html),
+which is a tool that prints out every `open(2)` call on the system as it happens.
+(I believe it is roughly equal to doing `strace -p 1 -f -e openat`, though opensnoop
+is much, much more efficient. Also, please don't run that `strace -p 1` command
+because I'm told it may degrade your sytem irreparably!)
+Also, in case you are afraid `open(2)` had
+"most favored syscall status," Brendan has also created
+[execsnoop](http://www.brendangregg.com/blog/2014-07-28/execsnoop-for-linux.html) and
+[iosnoop](http://www.brendangregg.com/blog/2014-07-16/iosnoop-for-linux.html),
+while others have contributed [some "snoops" of their own](https://github.com/iovisor/bcc/tree/master/tools).
+
+Another topic that comes up in a number of Brendan's talks is eBPF,
+which is [a sorta new/sorta old technology in Linux that seems
+a little crazy to me](https://lwn.net/Articles/740157/) in that it
+lets you upload code from user space to the kernel and then runs
+your program every time a designated code path in the kernel is taken.
+You can then communicate with your program from user space via a
+file descriptor.
+
+When I first read how this worked, it seemed crazy to me because
+in my mind, the kernel is this sacred bastion that needs to be
+incredibly secure and performant and yet we're going to let end
+users send in whatever they want and run it in there? As you might
+expect, you can't send "arbitrary code," but a program written in
+eBPF bytecode, which is a restricted instruction set. There are
+also limits on the size of the program and other constraints to
+ensure it is statically analyzable. The kernel verifies that there are no loops
+and that your code will terminate before it attaches the program to
+the specified codepath. In this way, it imposes an upper bound on
+how much "drag" your eBPF program can add on the system.
+
+eBPF is what enables Brendan to [build performant tracing tools for Linux](http://www.brendangregg.com/blog/2015-05-15/ebpf-one-small-step.html).
+In the case of opensnoop, he registers an eBPF program that is "attached"
+to the `open(2)` syscall and logs each one to an ["eBPF map."](https://prototype-kernel.readthedocs.io/en/latest/bpf/ebpf_maps.html)
+The userland code is able to read (or write!) the contents of the
+eBPF map via a file descriptor. In the case of opensnoop, it reads
+the data from the map and formats it so it can be displayed to the user
+on the console.
+
+Although I meant to learn about debugging performance issues,
+this eBPF stuff seemed pretty wild to me, so I decided to learn
+more about how it worked. I started reading other articles
+([this page appears to aspire to be the clearinghouse on BPF reading
+material](https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/),
+though to save you some time, [this guide](https://cilium.readthedocs.io/en/v1.2/bpf/)
+was one of the most information-rich pages I found on eBPF).
+
+If you end up doing Google searches to learn more about things like eBPF
+and opensnoop (and of course, [strace](https://jvns.ca/categories/strace/!)), another name you're likely to see is [Julia Evans](https://jvns.ca/).
+Like Brendan, she has produced a tremendous amount of great content.
+In particular, her [zines](https://jvns.ca/zines/) are quick reads and
+are incredibly approachable, though perhaps my favorite thing was
+her ["You can be a kernel hacker!"](https://youtu.be/0IQlpFWTFbM) talk
+where she showed how to create a kernel module that intercepts
+all of `open(2)` calls on the system, checks if the specified path ends
+in `.mp3`, and if so, opens `Rick Astley - Never Gonna Give You Up.mp3`
+instead. Brilliant!
+
+At this point, I decided I had done enough high-level background research:
+it was time to get into the mechanics of how this stuff worked!
+
+## Part 2: Initial Foray into eBPF
 
 After spending a bit of time with Brendan and Julia's material, what seemed like an obvious question to me was: “Why not build a version of strace in Rust that uses eBPF?” From what I had read, it sounded like eBPF could help with the performance issues of strace (which uses `ptrace(2)` under the hood) while also satisfying my personal (yet admittedly misguided) desire to replace C code with Rust whenever I encounter it. My gut feeling was that it should be possible to precompute the eBPF bytecode such that this new tracer written in pure Rust could start up very fast. This seemed like a worthwhile project that would give me an excuse to get my hands dirty with eBPF. I could call it **rstrace**!
 
@@ -76,7 +154,9 @@ My first thought was to write a standalone C program that would load and run the
 After reading `bpf(2)`, I thought this program was going to be simple to implement. I assumed all I would have to do is:
 
 * Define the eBPF program as an array of BPF bytecodes.
-* Call `bpf()` with `cmd=BPF_PROG_LOAD` and `attr.type=BPF_PROG_TYPE_KPROBE` to load the eBPF program and attach it as a kprobe.
+* Call `bpf()` with `cmd=BPF_PROG_LOAD` and `attr.type=BPF_PROG_TYPE_KPROBE` to load the eBPF program and attach it as a kprobe. (kprobe is short for "kernel probe,"
+which is a predefined location in the kernel where an eBPF program can be attached,
+such as the entry point to a system call.)
 
 These assumptions were not quite correct.
 
@@ -933,7 +1013,7 @@ My biggest surprise is that Brendan has a number of checklists of tools to run r
 
 From my cursory understanding of the space, it feels like there are a lot of *CLIs* out there that you can cobble together to make an application-specific performance tool, but not a lot of *libraries*. Perhaps this is the right place to start. I know I would be more inclined to build tools on top of libraries that I can access programmatically rather than having to write a bunch of logic to parse stdout in various formats.
 
-Because I was at home on paternity leave, it's not like I had a bunch of massive distributed systems lying around the house whose performance needed tuning. In other words, it seems difficult to improve one's skills in the abstract: this feels like an area where you have to build knowledge through experience. At this stage, there's no way I could remember how [all of these observability tools](http://www.brendangregg.com/Perf/linux_perf_tools_full.svg) work offhand, but at least I know Brendan's diagram exists and that I can use it as a starting point.
+Because I was at home on paternity leave, it's not like I had a bunch of massive distributed systems lying around the house whose performance needed tuning. In other words, it seems difficult to improve one's skills in the abstract: this feels like an area where you have to build knowledge through experience. At this stage, there's no way I could remember how [all of these tools](http://www.brendangregg.com/Perf/linux_perf_tools_full.svg) work offhand, but at least I know Brendan's diagram exists and that I can use it as a starting point.
 
 That said, both Brendan and Julia had examples in their talks where they would run a program with some sort of bad behavior, treating it as a black box, and then walking through the way you would use different tools to poke at the system to figure out what was going on (and then revealing the source code of the program at the end). It would be *amazing* if someone put together some sort of online learning course in this way to teach performance engineering: I'd certainly pay for that!
 
