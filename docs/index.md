@@ -27,6 +27,8 @@ So where to begin? On his [Linux Performance](http://brendangregg.com/linuxperf.
 
 ## Part 1: Learning Begins
 
+**TODO: This section is not done!**
+
 Explain what opensnoop is in here: http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html
 
 * USE method: http://brendangregg.com/usemethod.html
