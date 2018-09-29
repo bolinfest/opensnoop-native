@@ -1,5 +1,7 @@
 # How I ended up writing opensnoop in pure C using eBPF
 
+**Michael Bolin, September 2017**
+
 Recently, I was trying to debug a performance issue in [Eden](https://github.com/facebookexperimental/) with a coworker. He started spitting out things to try: “run vmstat 1,” “check iostat,” “ok, now mpstat,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
 
 Shortly thereafter, I asked myself: “Was I out playing Frisbee in the quad the day they went over Linux performance tools in school? How am I supposed to learn this stuff? Is there one book I can read to learn what I need to know? Why are there so many commands I need to learn?” I asked around and a friend told me to look at http://brendangregg.com/ to learn about performance engineering.
