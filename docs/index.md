@@ -103,7 +103,7 @@ though to save you some time, [this guide](https://cilium.readthedocs.io/en/v1.2
 was one of the most information-rich pages I found on eBPF).
 
 If you end up doing Google searches to learn more about things like eBPF
-and opensnoop (and of course, [strace](https://jvns.ca/categories/strace/!)), another name you're likely to see is [Julia Evans](https://jvns.ca/).
+and opensnoop (and of course, [strace](https://jvns.ca/categories/strace/)!), another name you're likely to see is [Julia Evans](https://jvns.ca/).
 Like Brendan, she has produced a tremendous amount of great content.
 In particular, her [zines](https://jvns.ca/zines/) are quick reads and
 are incredibly approachable, though perhaps my favorite thing was
