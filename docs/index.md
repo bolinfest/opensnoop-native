@@ -10,6 +10,21 @@ When you first visit Brendan's site, it's pretty overwhelming. With his long lis
 
 So where to begin? On his [Linux Performance](http://brendangregg.com/linuxperf.html) page, the section on talks is organized “[i]n rough order of recommended viewing or difficulty, intro to more advanced,” so I figured I would start at the top and work my way down, as appropriate.
 
+* [Part 1: Learning Begins](#part-1-learning-begins)
+* [Part 2: Initial foray into eBPF](#part-2-initial-foray-into-ebpf)
+* [Part 3: Standalone eBPF program without libbpf](#part-3-standalone-ebpf-program-without-libbpf)
+  * [Loading the Program](#loading-the-program)
+  * [Attaching the Kprobe](#attaching-the-kprobe)
+* [Part 4: Standalone opensnoop using eBPF in C](#part-4-standalone-opensnoop-using-ebpf-in-c)
+  * [What is libbpf?](#what-is-libbpf)
+  * [Generating the Bytecode](#generating-the-bytecode)
+  * [Working with BPF Maps](#working-with-bpf-maps)
+  * [Putting it all together](#putting-it-all-together)
+  * [Footnote: Struggles with C](#footnote-struggles-with-c)
+* [Part 5: Conclusions and Next Steps](#part-5-conclusions-and-next-steps)
+  * [Performance Engineering](#performance-engineering)
+  * [eBPF](#ebpf)
+
 ## Part 1: Learning Begins
 
 Explain what opensnoop is in here: http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html
