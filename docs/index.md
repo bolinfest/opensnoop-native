@@ -2,9 +2,11 @@
 
 **Michael Bolin, September 2018**
 
+**tl;dr** *I rewrote [opensnoop](http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html) in [C using eBPF](https://github.com/bolinfest/opensnoop-native/blob/master/opensnoop.c). This is the story of how I broke through layers of abstraction to figure out how to do it.*
+
 Recently, I was trying to debug a performance issue in [Eden](https://github.com/facebookexperimental/) with a coworker. He started spitting out things to try: “run vmstat 1,” “check iostat,” “ok, now mpstat,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
 
-Shortly thereafter, I asked myself: “Was I out playing Frisbee in the quad the day they went over Linux performance tools in school? How am I supposed to learn this stuff? Is there one book I can read to learn what I need to know? Why are there so many commands I need to learn?” I asked around and a friend told me to look at http://brendangregg.com/ to learn about performance engineering.
+Shortly thereafter, I asked myself: “Was I out playing Frisbee in the quad the day they went over Linux performance tools in school? How am I supposed to learn this stuff? Is there one book I can read to learn what I need to know? Why are there so many commands I need to learn?” I asked around and a friend told me to look at <http://brendangregg.com/> to learn about performance engineering.
 
 When you first visit Brendan's site, it's pretty overwhelming. With his long list of articles, talks, books, and of course, software, it's clear that Brendan is incredibly prolific and conscientious about sharing what he knows with everyone. When it comes to learning about computing performance, I haven't found anything that is a close second to Brendan or his web site.
 
@@ -14,7 +16,7 @@ So where to begin? On his [Linux Performance](http://brendangregg.com/linuxperf.
 * [Part 2: Initial foray into eBPF](#part-2-initial-foray-into-ebpf)
 * [Part 3: Standalone eBPF program without libbpf](#part-3-standalone-ebpf-program-without-libbpf)
   * [Loading the Program](#loading-the-program)
-  * [Attaching the Kprobe](#attaching-the-kprobe)
+  * [Attaching the kprobe](#attaching-the-kprobe)
 * [Part 4: Standalone opensnoop using eBPF in C](#part-4-standalone-opensnoop-using-ebpf-in-c)
   * [What is libbpf?](#what-is-libbpf)
   * [Generating the Bytecode](#generating-the-bytecode)
@@ -46,19 +48,19 @@ Because I suspected this would not be an original idea, instead of just trying t
 * [vltrace](https://github.com/pmem/vltrace) is an open source project to build an strace that uses eBPF. It is written in C (bleh) and it [compiles all of the eBPF bytecode on the fly from generated C source every time it is run](https://github.com/pmem/vltrace/blob/512496d7e9f0688d4dad1931a0a212ae4c8f51ad/src/vltrace.c#L376-L403) (double bleh).
 * The Rust [bcc-sys crate](https://crates.io/crates/bcc-sys) provides Rust bindings for [BCC](https://github.com/iovisor/bcc) while the [bcc crate](https://crates.io/crates/bcc) (initially created by Julia Evans) tries to provide a cleaner API on top of `bcc-sys`. Like vltrace, [this also compiles the eBPF bytecode on the fly from C code](https://github.com/rust-bpf/rust-bcc/blob/60c5459cfd4baff40b001f2ffc974fddf8e02421/examples/opensnoop.rs#L35-L37).
 
-I thought it was strange that both vltrace and the opensnoop example in the `bcc` crate chose to compile the eBPF bytecode on the fly. As a number of folks had noted in various articles I read, this required linking in a chunk of the LLVM toolchain and exercising it at runtime, which seemed inelegant if it could be avoided. For example, from Geoffroy's blog post:
+I thought it was strange that both vltrace and the opensnoop example in the `bcc` crate chose to compile the eBPF bytecode from C source on the fly. As a number of folks had noted in various articles I read, this required linking in a chunk of the LLVM toolchain and exercising it at runtime, which seemed inelegant/heavyweight. For example, from Geoffroy's blog post:
 
-“Unfortunately, those tools make a tradeoff that’s slightly annoying for me: they require installing BCC, which requires Python, LLVM and the complete Linux sources, on the target machines. It might be possible to precompile the programs though, but it does not look like it’s a common use case with BCC.”
+> “Unfortunately, those tools make a tradeoff that’s slightly annoying for me: they require installing BCC, which requires Python, LLVM and the complete Linux sources, on the target machines. It might be possible to precompile the programs though, but it does not look like it’s a common use case with BCC.”
 
 I also thought it was strange that various attributes in Geoffroy's example were used to ensure code was written into specific sections of the ELF binary. My gut feeling was that this was *accidental* rather than *essential* complexity, but I wanted to be sure.
 
-Because Geoffroy's article was inline with what I wanted to do and contained a lot of useful exposition, I decided to try to understand it in detail before I wrote any code of my own. Although his post contained a bunch of sample code [which initially turned out to contain numerous typos due to HTML escaping errors], it did not have an associated Git repo to clone to reproduce the results. I decided that my first order of business would be to reproduce the results of the blog post locally. (Ultimately, I would make my code available at https://github.com/bolinfest/rust-ebpf-demo/, then I [notified Geoffroy](https://twitter.com/bolinfest/status/1039298420240863232) about my work and the typos, and [he fixed everything](https://twitter.com/gcouprie/status/1039424926615330817).)
+Because Geoffroy's article was inline with what I wanted to do and contained a lot of useful exposition, I decided to try to understand it in detail before I wrote any code of my own. Although his post contained a bunch of sample code [which initially turned out to contain numerous typos due to HTML escaping errors], it did not have an associated Git repo to clone to reproduce the results. I decided that my first order of business would be to reproduce the results of the blog post locally. (Ultimately, I would make my code available at <https://github.com/bolinfest/rust-ebpf-demo/>, then I [notified Geoffroy](https://twitter.com/bolinfest/status/1039298420240863232) about my work and the typos, and [he fixed everything](https://twitter.com/gcouprie/status/1039424926615330817).)
 
-I believe I used different versions of `rustc` and `clang` than the Geoffroy because (1) [I couldn't compile his Rust code](https://twitter.com/bolinfest/status/1039550675850416128), and (2) my version of the eBPF program was only 14 instructions whereas his was 36. I assumed that I was using a newer version of the LLVM toolchain with improved optimizations for eBPF codegen, but I wanted to be sure they were functionally equivalent. To that end, I decided to go through the assembly line-by-line to ensure I understood everything.
+I believe I used different versions of `rustc` and LLVM than the Geoffroy because (1) [I couldn't compile his Rust code](https://twitter.com/bolinfest/status/1039550675850416128), and (2) my version of the eBPF program was only 14 instructions whereas his was 36. I assumed that I was using a newer version of the LLVM toolchain with improved optimizations for eBPF codegen, but I wanted to be sure they were functionally equivalent. To that end, I decided to go through the assembly line-by-line to ensure I understood everything.
 
 I spent a lot of time reading the [“Unofficial eBPF spec”](https://github.com/iovisor/bpf-docs/blob/b5ac15bfefc25fb13b4178a3fed2932fc2a795f1/eBPF.md) on GitHub to learn about the different opcodes and their arguments. I [updated my README with a line-by-line annotation of the eBPF program](https://github.com/bolinfest/rust-ebpf-demo/#annotated-bytecode). As someone who has never bothered to learn x86[_64] assembly, this was quite tedious, but also enlightening. (This knowledge would also prove helpful down the road.) Ultimately, I discovered what the program is doing is pretty simple:
 
-* First, it writes the C string `"hello from rust\n"` to the stack, which took two “wide” writes of 8 bytes each (for `"om rust\n"` and `"hello fr"`, respectively), plus a write of 1 byte for the trailing `\0` because it is a C string.
+* First, it writes the C string `"hello from rust\n"` to the stack, which took two “wide” writes of 8 bytes each (for `"om rust\n"` and `"hello fr"`, respectively), plus a write of 1 byte for the trailing `'\0'` because it is a C string.
 * The address of the C string is written to `r1` and its length (`17`, which includes the NUL byte) is written to `r2`.
 * With the appropriate arguments for `bpf_trace_printk()` written to `r1` and `r2` ([as per the BPF calling convention](https://cilium.readthedocs.io/en/v1.2/bpf/#instruction-set)), the function (which corresponds to the number `6` because of [its position in the bpf_func_id enum](https://elixir.bootlin.com/linux/v4.7/source/include/uapi/linux/bpf.h#L153)) is called.
 * Finally, the exit code (`0`) is written to `r0` and the program exits.
@@ -69,7 +71,7 @@ Although I had now explained to myself how the eBPF program worked, understandin
 
 ## Part 3: Standalone eBPF program without libbpf
 
-My first thought was to write a standalone C program that would load and run the `bpf_trace_printk()` eBPF program from Geoffroy's blog post. I figured this would help me answer the question of whether I needed the labeled ELF sections mentioned in the blog post and whether I would have to port a bunch of the Go code in https://github.com/iovisor/gobpf/tree/master/elf to Rust to build rstrace.
+My first thought was to write a standalone C program that would load and run the `bpf_trace_printk()` eBPF program from Geoffroy's blog post. I figured this would help me answer the question of whether I needed the labeled ELF sections mentioned in the blog post and whether I would have to port a bunch of the Go code in <https://github.com/iovisor/gobpf/tree/master/elf> to Rust to build rstrace.
 
 After reading `bpf(2)`, I thought this program was going to be simple to implement. I assumed all I would have to do is:
 
@@ -80,7 +82,7 @@ These assumptions were not quite correct.
 
 ### Loading the Program
 
-My first surprise was that despite doing `#include <linux/bpf.h>`, there was no `bpf()` function for me to call. Instead, I had to use `syscall(2)` to call `bpf(2)` even though I expected there to be a `bpf()` function available since everything else I ever looked up in [section 2](https://en.wikipedia.org/wiki/Man_page#Manual_sections) had a function of same name:
+My first surprise was that despite doing `#include <linux/bpf.h>`, there was no `bpf()` function for me to call. Instead, I had to use `syscall(2)` to call `bpf(2)` even though I expected there to be a `bpf()` function available since everything else I ever looked up in [section 2 of the man pages](https://en.wikipedia.org/wiki/Man_page#Manual_sections) had a function of same name:
 
 ```c
 syscall(__NR_bpf, BPF_PROG_LOAD, &attr, sizeof(attr));
@@ -163,7 +165,7 @@ struct bpf_insn {
 };
 ```
 
-Note how there is a `:4` after the second two fields, indicating that each field contributes 4 bits. Because the maximum value of 4 (unsigned) bits is 1111 in binary (15 in decimal), then the compiler will complain if you try to assign a value greater than 15 to either `dst_reg` or `src_reg`. To verify the bit representation of the struct, I wrote a small program:
+Note how there is a `:4` after the second two fields, indicating that each field contributes 4 bits. Because the maximum value of 4 (unsigned) bits is `1111` in binary (15 in decimal), the compiler will complain if you try to assign a value greater than 15 to either `dst_reg` or `src_reg`. To verify the bit representation of the struct, I wrote a small program:
 
 ```c
 #include <linux/bpf.h>
@@ -187,7 +189,7 @@ When I compile and run the program on my system, piping the output to `xxd`, I g
 00000000: 187e feca 6f6d 2072                      ....om r
 ```
 
-As you can see, the struct is written as little-endian based on the way the `imm` field is serialized. What is perhaps less obvious is that `dst_reg` is the low-order nibble and `src_reg` is the high-order nibble in the second byte written to the output.
+As you can see, the values in the struct are written as little-endian based on the way the `imm` field is serialized. What is perhaps less obvious is that `dst_reg` is the low-order nibble and `src_reg` is the high-order nibble in the second byte written to the output.
 
 Incidentally, you are not limited to nibble boundaries when declaring structs (or even requiring all sub-byte fields to be the same type or signed-ness) as I discovered I could also do:
 
@@ -207,11 +209,13 @@ fwrite(&ex, sizeof(ex), 1, stdout);
 
 Anyway, back to the problem at hand...
 
-Things got interesting/frustrating here because my call to `bpf(2)` was failing with `EINVAL`. I wasn't sure what I could be doing wrong as the only relevant mention of `EINVAL` in the man page was: “For `BPF_PROG_LOAD`, indicates an attempt to load an invalid program. eBPF programs can be deemed invalid due to unrecognized instructions, the use of reserved fields, jumps out of range, infinite loops or calls of unknown functions.”
+Things got interesting/frustrating here because my call to `bpf(2)` was failing with `EINVAL`. I wasn't sure what I could be doing wrong as the only relevant mention of `EINVAL` in the man page was:
 
-I tried running my program under `gdb` to make sure all of the values I was passing to `bpf(2)` were what I expected. I discovered that the way I calculated the instruction count was incorrect, so I fixed that. Again, I looked at `libbpf.c` to see how they implemented `bpf_prog_load()` and I noticed that they [zeroed the bpf_attr before writing to it](https://github.com/iovisor/bcc/blob/89aefcc9a89216da3558b891e0d6cb235b0e07a0/src/cc/libbpf.c), so I added code to do that. These were issues that had to be fixed, but I was still getting `EINVAL`.
+> For `BPF_PROG_LOAD`, indicates an attempt to load an invalid program. eBPF programs can be deemed invalid due to unrecognized instructions, the use of reserved fields, jumps out of range, infinite loops or calls of unknown functions.
 
-I tried looking in various places for a more detailed error message. I ran `dmesg -T | tail`, but there was nothing there. Looking at the `libbpf.c` further, [I discovered I should also check the log_buf I passed into bpf_prog_load()](https://github.com/iovisor/bcc/blob/89aefcc9a89216da3558b891e0d6cb235b0e07a0/src/cc/libbpf.c#L599-L608), as an error message could be printed there, but that also came up empty.
+I tried running my program under `gdb` to make sure all of the values I was passing to `bpf(2)` were what I expected. I discovered that the way I calculated the instruction count was incorrect, so I fixed that. Again, I looked at `libbpf.c` to see how they implemented `bpf_prog_load()` and I noticed that they [zeroed the bpf_attr before writing to it](https://github.com/iovisor/bcc/blob/89aefcc9a89216da3558b891e0d6cb235b0e07a0/src/cc/libbpf.c), so I added code to do that, too. These were issues that had to be fixed, but I was still getting `EINVAL`.
+
+I tried looking in various places for a more detailed error message. I ran `dmesg -T | tail`, but there was nothing there. Looking at `libbpf.c` further, [I discovered I should also check the log_buf I passed into bpf_prog_load()](https://github.com/iovisor/bcc/blob/89aefcc9a89216da3558b891e0d6cb235b0e07a0/src/cc/libbpf.c#L599-L608), as an error message could be printed there, but that also came up empty.
 
 I was pretty frustrated at this point because my implementation of `bpf_prog_load()` was basically [taken straight from the man page](https://github.com/mkerrisk/man-pages/blob/man-pages-4.15/man2/bpf.2#L724-L742):
 
@@ -246,7 +250,7 @@ For whatever reason, I have never looked at the Linux source code before (mostly
         return -EINVAL;
 ```
 
-As you can see, the sample implementation of `bpf_prog_load()` from the man page makes no mention of `kern_version`, though clearly the Linux kernel will reject your eBPF program with `EINVAL` if `prog_type=BPF_PROG_TYPE_KPROBE` if `kern_version != LINUX_VERSION_CODE`. I then searched the man page for `kern_version`, and there is indeed a note:
+As you can see, the sample implementation of `bpf_prog_load()` from the man page makes no mention of `kern_version`, though clearly the Linux kernel will reject your eBPF program with `EINVAL` if `prog_type=BPF_PROG_TYPE_KPROBE` and `kern_version != LINUX_VERSION_CODE`. I then searched the man page for `kern_version`, and there is indeed a note buried in there:
 
 ```c
 union bpf_attr {
@@ -284,7 +288,7 @@ union bpf_attr {
 } __attribute__((aligned(8)));
 ```
 
-I added `#include <linux/version.h>` to the top of my file and set `kern_version` on my `bpf_attr` and now my `bpf_prog_load()` function succeeded!
+I added `#include <linux/version.h>` to the top of my file and set `kern_version` to `LINUX_VERSION_CODE` on my `bpf_attr` and now my `bpf_prog_load()` function succeeded!
 
 That said, I had misgivings about hardcoding `LINUX_VERSION_CODE` in my source because that meant I could not give the binary version of my program to someone on a slightly different version of the kernel because the version number from my machine would be hardcoded into the binary, causing the version check in a machine with a different kernel to fail. I thought it would be better to calculate the version number dynamically using `uname(2)`; however, I tried running the following on my machine:
 
@@ -328,7 +332,7 @@ KERNEL_VERSION(4, 15, 0): 265984
 
 In other words, calculating the Linux version based on `uname(2)` yields a number that does not match `LINUX_VERSION_CODE`! It seemed I would have to hardcode it. (Incidentally, BCC appears to support a [BCC_LINUX_VERSION_CODE environment variable](https://github.com/iovisor/bcc/blob/3d2211632247ad0d1ee9d1ecc1162764322eb974/docs/reference_guide.md#2-kernel-version-overriding) to help with this, but I don't believe it would help with the `uname`/`LINUX_VERSION_CODE` mismatch that I was seeing.)
 
-### Attaching the Kprobe
+### Attaching the kprobe
 
 Unfortunately, my program did not actually do anything because I needed to attach a kprobe. Again, I took a look at [the implementation of bpf_attach_kprobe() in libbpf.c](https://github.com/iovisor/bcc/blob/3d2211632247ad0d1ee9d1ecc1162764322eb974/src/cc/libbpf.c#L820-L872) to see what was going on: it was not a simple call to `bpf(2)` as I thought. Because I wanted to avoid linking in libbpf because I (erroneously! see next section) thought it would pull in LLVM, [I decided to copy the minimal subset of libbpf.c that I needed directly into my program](https://github.com/bolinfest/rust-ebpf-demo/commit/55e880d04329c25d1271a44e9c9d147c1c04ba2d#diff-3552c49fbb4741b6095394bf1b4086a7). (I also had to lift some code from [the attach_kprobe() function in the Python wrapper](https://github.com/iovisor/bcc/blob/27e7aeab5d7b9f0f4259fb0f996274af0521243f/src/python/bcc/__init__.py#L575-L598) to figure out what arguments to pass to `bpf_attach_kprobe()` in C.)
 
@@ -417,7 +421,7 @@ This was an important breakthrough because it clarified the difference between l
 
 In one of Brendan's talks, he mentioned that one of the nice things the Python bindings for BCC allowed you to do was to dynamically populate a template of the C code for your BPF program at runtime. When I first watched the talk, I had no idea how important it was, but now that I was looking at his `opensnoop.py` code, I could see the appeal.
 
-Specifically, opensnoop supports a `-p` option to filter events by process ID and a `-t` option to filter events by thread ID. Although this filtering could be done in user space, it is much more efficient to check it in kernel space (i.e., in the BPF program) to avoid writing unnecessary entries to a BPF map. Because the PID/TID filter values are not known to opensnoop until runtime, the BPF program cannot be precompiled. opensnoop works around this by dynamically generating the C code for BCC to compile in Python based on a template that is parameterized by `-p` and `-t`. At first glance, this seemed like it could potentially undermine everything I was trying to do: one of my prized design goals was to avoid using BCC at runtime.
+Specifically, opensnoop supports a `-p` option to filter events by process ID and a `-t` option to filter events by thread ID. Although this filtering could be done in user space, it is much more efficient to check it in kernel space (i.e., in the BPF program) to avoid writing unnecessary entries to a BPF map. Because the PID/TID filter values are not known to opensnoop until runtime, the BPF program cannot be precompiled. opensnoop works around this by [dynamically generating the C code for BCC to compile](https://github.com/iovisor/bcc/blob/f138fea5a9ab279b7347fa6acfd2f53777068b27/tools/opensnoop.py#L121-L128) in Python based on a template that is parameterized by `-p` and `-t`. At first glance, this seemed like it could potentially undermine everything I was trying to do: one of my prized design goals was to avoid using BCC at runtime.
 
 My first potential workaround was to create a static BPF program that could read “parameters” at runtime via a BPF map. I [created a working prototype of this approach](https://github.com/bolinfest/bcc/commit/b60e496af5f76f3ea43a4dc2df4ed08d2b911285) and even [tweeted it to Brendan to get his thoughts](https://twitter.com/bolinfest/status/1039620317822345216). He main concern was the extra array lookup each time the kprobe was called. I also felt it was a bit inelegant, so I decided to try to do better.
 
@@ -438,7 +442,7 @@ This means that when the Python code is iterating over the bytecode, if it finds
 The function prototypes for the C functions that generate the corresponding BPF programs are as follows (the `int fd3` param will be explained in the next section):
 
 ```c
-void generate_trace_entry(struct bpf_insn instructions[], int fd3, int fd3);
+void generate_trace_entry(struct bpf_insn instructions[], int fd3);
 void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int fd3);
 void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int fd3);
 ```
@@ -510,7 +514,6 @@ bpf_perf_event_output(
 Now the `perf_submit()` method had become a pure function! Though this led to new questions, such as, “What is `bpf_pseudo_fd(1, 4)`?” Fortunately, somewhere around here I discovered the various ways to dump debugging info using the Python bindings. For example, if I changed [this line in opensnoop.py](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/tools/opensnoop.py#L135) to the following:
 
 ```python
-# initialize BPF
 from bcc import DEBUG_PREPROCESSOR
 b = BPF(text=bpf_text, debug=DEBUG_PREPROCESSOR)
 import sys; sys.exit(0)
@@ -606,7 +609,7 @@ What we appear to have on the first line is a [long!] `clang` command to run fol
 
 Looking at the preprocessed source code itself, we can see that operations on the maps have been replaced with calls to `bpf_map_update_elem()`, `bpf_map_lookup_elem()`, `bpf_perf_event_output()`, and `bpf_map_delete_elem()`. Understanding this translation helped remove some of the abstractions between the high-level BCC toolkit and the low-level understanding I sought.
 
-Trying other `debug` options with `BPF()` unlocked more information. Specifically, if tried using `DEBUG_SOURCE` instead of `DEBUG_PREPROCESSOR` and ran `opensnoop.py` again:
+Trying other `debug` options with `BPF()` unlocked more information. Specifically, if tried using `DEBUG_SOURCE` instead of `DEBUG_PREPROCESSOR` and ran `opensnoop.py` again, I got:
 
 ```
 Disassembly of section .bpf.fn.trace_entry:
@@ -757,9 +760,9 @@ trace_return:
 
 This was great! This provided output analogous to what `llvm-objdump` provided in Geoffrey's blog post. (Incidentally, [I built BCC using LLVM 7](https://github.com/iovisor/bcc/issues/1964). At other points, I had built it with LLVM 5, but I'm not sure the `DEBUG_SOURCE` output was as rich with the earlier version of LLVM, so that could explain why you get different results if you try to reproduce this.) Again, there were references in this output to `bpf_pseudo_fd()` and `ld_pseudo` that I didn't understand. Grepping for these terms in the BCC codebase revealed very little.
 
-Looking at [the bpf_*_elm() functions](https://github.com/iovisor/bcc/blob/master/src/cc/libbpf.h#L37-L39) declared in `libbpf.h`, the first parameter for each was `int fd`, so based on the output of `debug=DEBUG_PREPROCESSOR`, it occurred to me that `(void *)bpf_pseudo_fd(1, 3)` would have to return the file descriptor for the `infotmp` map. Somewhere around here, it dawned on me that because stdin/stdout/stderr are fds 0/1/2, respectively, then there must be some logic to infer/ensure that the fds for infotmp/events must be 3/4, respectively. I tried swapping the order of the BPF map declarations in `opensnoop.py` and verified that the file descriptors were swapped accordingly!
+Looking at [the bpf_*_elem() functions](https://github.com/iovisor/bcc/blob/master/src/cc/libbpf.h#L37-L39) declared in `libbpf.h`, the first parameter for each was `int fd`, so based on the output of `debug=DEBUG_PREPROCESSOR`, it occurred to me that `(void *)bpf_pseudo_fd(1, 3)` would have to return the file descriptor for the `infotmp` map. Somewhere around here, it dawned on me that because `stdin`/`stdout`/`stderr` are fds 0/1/2, respectively, then there must be some logic to infer/ensure that the fds for `infotmp`/`events` must be 3/4, respectively. I tried swapping the order of the BPF map declarations in `opensnoop.py` and verified that the file descriptors were swapped accordingly!
 
-Now I was getting somewhere. I realized that I should use `bpf_create_map()` in `libbpf.h` to create my maps and get their file descriptors. To figure out what values to pass, [I looked at the code in helpers.h](https://github.com/iovisor/bcc/blob/master/src/cc/export/helpers.h#L135-L136) and determined that `10240` was the appropriate default value for the `max_entries` of a `BPF_HASH` (I confirmed this is the value that was actually used by running strace on `opensnoop.py`). Though for `events`, `max_entries` was `8` according to strace. I looked at the code in `b_frontend_action.cc` and discovered  [the value for max_entries was determined by the number of “possible” CPUs](https://github.com/iovisor/bcc/blob/master/src/cc/frontends/clang/b_frontend_action.cc#L1170-L1174) at runtime. This is a good reminder to look at the source as well as strace!
+Now I was getting somewhere. I realized that I should use `bpf_create_map()` in `libbpf.h` to create my maps and get their file descriptors. To figure out what values to pass, [I looked at the code in helpers.h](https://github.com/iovisor/bcc/blob/master/src/cc/export/helpers.h#L135-L136) and determined that `10240` was the appropriate default value for the `max_entries` of a `BPF_HASH`. (I confirmed this is the value that was actually used by running strace on `opensnoop.py`.) Though for `events`, `max_entries` was `8` according to strace. I looked at the code in `b_frontend_action.cc` and discovered  [the value for max_entries was determined by the number of “possible” CPUs](https://github.com/iovisor/bcc/blob/master/src/cc/frontends/clang/b_frontend_action.cc#L1170-L1174) at runtime. This is a good reminder to look at the source as well as strace to avoid simply hardcoding the observed values!
 
 I thought it was a bit weird that the instructions that were annotated with `ld_pseudo` in the debug output corresponded to things like:
 
@@ -769,7 +772,7 @@ instructions[18] = (struct bpf_insn) {
   .dst_reg = BPF_REG_1,
   .src_reg = BPF_REG_1,
   .off     = 0,
-  .imm     = fd3,
+  .imm     = 3,
 };
 ```
 
@@ -781,7 +784,7 @@ R1 type=inv expected=map_ptr
 
 I had no idea what that meant, so I Googled it and found [this issue](https://github.com/iovisor/bcc/issues/209) filed against BCC by Brendan himself (at least now I felt I was in good company!). What I eventually deduced was that when loading a 64-bit value (`opcode=0x18`), `src_reg` must be set to `1` so that the value being loaded is tagged as a “map_ptr” (i.e., a file descriptor for a BPF map) rather than an arbitrary value, which is necessary to satisfy the BPF program verifier.
 
-With this newfound knowledge, I realized that every bytecode with `opcode=0x18` and `src_reg=1` would have to be rewritten to take `imm` as a parameter. I updated my Python logic that was responsible for generating `generate_trace_entry()` and friends so that it would put all of the `imm` values used with `ld_pseudo` into a set that would then be used to determine the additional parameters to add to the function prototype. I now had my code to create the BPF maps and load the BPF program with the appropriate file descriptors for the maps.
+With this newfound knowledge, I realized that every bytecode with `opcode=0x18` and `src_reg=1` would have to be rewritten to take `imm` as a parameter to the generated C function. I updated my Python logic that was responsible for generating `generate_trace_entry()` and friends so that it would put all of the `imm` values used with `ld_pseudo` into a set that would then be used to determine the additional parameters to add to the function prototype. I now had my code to create the BPF maps and load the BPF program with the appropriate file descriptors for the maps.
 
 ### Putting it all together
 
@@ -795,9 +798,9 @@ while not args.duration or datetime.now() - start_time < args.duration:
     b.perf_buffer_poll()
 ```
 
-It was at this point that I would begin to fully appreciate the additional abstraction that the BCC Python bindings provided. Initially, I expected the BCC Python bindings to be a thin wrapper around libbcc/libbpf, but it turns out they do quite a bit more than that. (Moreover, they also painted a picture of what sort of functionality a Rust wrapper around BPF should look like.) For example, [that little open_perf_buffer() method](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/src/python/bcc/table.py#L553-L597) turned out to have quite a bit of logic behind it. It also contained this innocuous helper function, `get_online_cpus()`, which took many lines of C code to implement (see the next section on “struggles with C.”)
+It was at this point that I would begin to fully appreciate the additional abstraction that the BCC Python bindings provided. Initially, I expected the BCC Python bindings to be a thin wrapper around libbcc/libbpf, but it turns out they do quite a bit more than that. (Moreover, they also painted a picture of what sort of functionality a Rust wrapper around BPF should look like.) For example, [that little open_perf_buffer() method](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/src/python/bcc/table.py#L553-L597) turned out to have quite a bit of logic behind it. It also contained an innocuous helper function, `get_online_cpus()`, which took many lines of C code to implement (see [the next section on “struggles with C.”](#footnote-struggles-with-c))
 
-Nevertheless, once I got the basics working end-to-end, I started to polish things up. For starters, I introduced `getopt_long(3)` for arg parsing so I could support the exact same options as `opensnoop.py`. I also discovered an unused variable in the BPF program, [which I fixed upstream](https://github.com/iovisor/bcc/pull/1981). I also discovered that the BPF program was doing an extra division on a `u64` that I believe was necessary to ensure the value would still fit in a Python int when converted, [so I deleted that step](https://github.com/bolinfest/rust-ebpf-demo/commit/afa0e91e17939be80def67b224e761f5288d2d82) since I didn't have that concern in my program. Finally, [I moved some definitions into a common header file](https://github.com/bolinfest/rust-ebpf-demo/commit/f528a8ad9b7305f482623b1b94448df035a58e18) that could be shared with opensnoop.c and the codegen step, which felt cleaner than trying to keep the Python and C versions in sync [as opensnoop.py does](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/tools/opensnoop.py#L142-L149).
+Nevertheless, once I got the basics working end-to-end, I started to polish things up. For starters, I introduced `getopt_long(3)` for arg parsing so I could support the exact same options as `opensnoop.py`. I also discovered an unused variable in the BPF program, [which I fixed upstream](https://github.com/iovisor/bcc/pull/1981). I also discovered that the BPF program was doing an extra division on a `u64` that I believe was necessary to ensure the value would still fit in a Python `int` when converted, [so I deleted that step](https://github.com/bolinfest/rust-ebpf-demo/commit/afa0e91e17939be80def67b224e761f5288d2d82) since I didn't have that concern in my program. Finally, [I moved some definitions into a common header file](https://github.com/bolinfest/rust-ebpf-demo/commit/f528a8ad9b7305f482623b1b94448df035a58e18) that could be shared with `opensnoop.c` and the codegen step, which felt cleaner than trying to keep the Python and C versions in sync [as opensnoop.py does](https://github.com/iovisor/bcc/blob/54e377d29b1e09968b8278c039fc3e146da9d962/tools/opensnoop.py#L142-L149).
 
 It was finally time to declare my program complete!
 
@@ -926,13 +929,13 @@ Although this project started as an attempt to teach myself how to debug perform
 
 ### Performance Engineering
 
-My biggest surprise is that Brendan has a number of checklists of tools to run rather than one tool that runs everything in the checklist. It's possible that it's too hard to create a “one size fits all” tool for this sort of thing because the USE method requires that you start from a functional diagram of your system, which a general tool cannot be expected to know (at least not without any configuration). Despite the challenges, I think there could be a big opportunity here.
+My biggest surprise is that Brendan has a number of checklists of tools to run rather than one tool that runs everything in the checklist and prints out a summary. It's possible that it's too hard to create a “one size fits all” tool for this sort of thing because the USE method requires that you start from a functional diagram of your system, which a general tool cannot be expected to know (at least not without any configuration). Despite the challenges, I think there could be a big opportunity here.
 
 From my cursory understanding of the space, it feels like there are a lot of *CLIs* out there that you can cobble together to make an application-specific performance tool, but not a lot of *libraries*. Perhaps this is the right place to start. I know I would be more inclined to build tools on top of libraries that I can access programmatically rather than having to write a bunch of logic to parse stdout in various formats.
 
 Because I was at home on paternity leave, it's not like I had a bunch of massive distributed systems lying around the house whose performance needed tuning. In other words, it seems difficult to improve one's skills in the abstract: this feels like an area where you have to build knowledge through experience. At this stage, there's no way I could remember how [all of these observability tools](http://www.brendangregg.com/Perf/linux_perf_tools_full.svg) work offhand, but at least I know Brendan's diagram exists and that I can use it as a starting point.
 
-That said, both Brendan and Julia had examples in their talks where they would run a program with some sort of bad behavior, treating it as a black box, and then walking through the way you would use different tools to poke at the system to figure out what was going on (and then revealing the source code of the program at the end). It would be *amazing* if someone put together a whole Coursera-style course in this way to teach performance engineering: I'd certainly pay for that!
+That said, both Brendan and Julia had examples in their talks where they would run a program with some sort of bad behavior, treating it as a black box, and then walking through the way you would use different tools to poke at the system to figure out what was going on (and then revealing the source code of the program at the end). It would be *amazing* if someone put together some sort of online learning course in this way to teach performance engineering: I'd certainly pay for that!
 
 ### eBPF
 
