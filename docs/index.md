@@ -1,6 +1,6 @@
 # How I ended up writing opensnoop in pure C using eBPF
 
-**Michael Bolin, September 2017**
+**Michael Bolin, September 2018**
 
 Recently, I was trying to debug a performance issue in [Eden](https://github.com/facebookexperimental/) with a coworker. He started spitting out things to try: “run vmstat 1,” “check iostat,” “ok, now mpstat,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
 
