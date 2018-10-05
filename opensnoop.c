@@ -46,12 +46,13 @@ int getOnlineCpus(int **cpus, size_t *numCpu) {
   const int bufSize = 256;
   char buf[bufSize];
   int numRead = read(fd, buf, bufSize);
+  int isCloseOk = close(fd) == 0;
+
   if (numRead == bufSize || numRead == 0) {
     // We are not prepared for the output to be this big (or empty)!
     errno = EINVAL;
     return -1;
-  }
-  if (close(fd) < 0) {
+  } else if (!isCloseOk) {
     return -1;
   }
 
