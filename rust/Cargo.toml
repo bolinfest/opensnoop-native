@@ -1,0 +1,6 @@
+[package]
+name = "opensnoop"
+version = "0.0.0"
+
+[build-dependencies]
+bindgen = "0.42.0"
