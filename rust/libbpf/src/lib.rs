@@ -5,8 +5,10 @@ use std::fs::File;
 use std::io;
 use std::mem;
 use std::mem::size_of;
+use std::option::Option;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
+use std::os::unix::io::AsRawFd;
 use std::os::unix::io::FromRawFd;
 
 pub enum BpfMapType {
@@ -57,6 +59,40 @@ fn to_map_type(bpf_map_type: BpfMapType) -> raw_libbpf::bpf_map_type {
     BpfMapType::SockHash => raw_libbpf::bpf_map_type_BPF_MAP_TYPE_SOCKHASH,
     BpfMapType::CgroupStorage => raw_libbpf::bpf_map_type_BPF_MAP_TYPE_CGROUP_STORAGE,
     BpfMapType::ReusePortSockArray => raw_libbpf::bpf_map_type_BPF_MAP_TYPE_REUSEPORT_SOCKARRAY,
+  }
+}
+
+#[derive(Debug)]
+pub struct BpfMap {
+  /// Wrap the fd as a File so that it is automatically closed when it goes out
+  /// of scope.
+  fd: File,
+}
+
+pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io::Result<BpfMap> {
+  let key_size = size_of::<K>() as i32;
+  let value_size = size_of::<V>() as i32;
+  // TODO: Create a typesafe enum for map flags and make it a param.
+  let map_flags: c_int = 0;
+  let name = CString::new("not currently configurable").unwrap();
+  let map_fd = unsafe {
+    raw_libbpf::bpf_create_map(
+      to_map_type(bpf_map_type),
+      name.as_ptr(),
+      key_size,
+      value_size,
+      max_entries,
+      map_flags,
+    )
+  };
+
+  if map_fd >= 0 {
+    let file = unsafe { File::from_raw_fd(map_fd) };
+    Ok(BpfMap { fd: file })
+  } else if map_fd == -1 {
+    Err(io::Error::last_os_error())
+  } else {
+    panic!("Unexpected value from bpf_create_map(): {}", map_fd)
   }
 }
 
@@ -114,44 +150,10 @@ fn to_prog_type(bpf_prog_type: BpfProgType) -> raw_libbpf::bpf_prog_type {
 }
 
 #[derive(Debug)]
-pub struct BpfMap {
-  /// Wrap the fd as a File so that it is automatically closed when it goes out
-  /// of scope.
-  fd: File,
-}
-
-#[derive(Debug)]
 pub struct BpfProg {
   /// Wrap the fd as a File so that it is automatically closed when it goes out
   /// of scope.
   fd: File,
-}
-
-pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io::Result<BpfMap> {
-  let key_size = size_of::<K>() as i32;
-  let value_size = size_of::<V>() as i32;
-  // TODO: Create a typesafe enum for map flags and make it a param.
-  let map_flags: c_int = 0;
-  let name = CString::new("not currently configurable").unwrap();
-  let map_fd = unsafe {
-    raw_libbpf::bpf_create_map(
-      to_map_type(bpf_map_type),
-      name.as_ptr(),
-      key_size,
-      value_size,
-      max_entries,
-      map_flags,
-    )
-  };
-
-  if map_fd >= 0 {
-    let file = unsafe { File::from_raw_fd(map_fd) };
-    Ok(BpfMap { fd: file })
-  } else if map_fd == -1 {
-    Err(io::Error::last_os_error())
-  } else {
-    panic!("Unexpected value from bpf_create_map(): {}", map_fd)
-  }
 }
 
 pub fn bpf_prog_load(
@@ -185,5 +187,53 @@ pub fn bpf_prog_load(
     Err(io::Error::last_os_error())
   } else {
     panic!("Unexpected value from bpf_prog_load(): {}", prog_fd)
+  }
+}
+
+pub enum BpfProbeAttachType {
+  Entry,
+  Return,
+}
+
+#[derive(Debug)]
+pub struct Kprobe {
+  /// Wrap the fd as a File so that it is automatically closed when it goes out
+  /// of scope.
+  fd: File,
+}
+
+pub fn bpf_attach_kprobe(
+  prog: BpfProg,
+  attach_type: BpfProbeAttachType,
+  ev_name: *const c_char,
+  fn_name: *const c_char,
+  fn_offset: Option<u64>,
+) -> io::Result<Kprobe> {
+  let kprobe_fd = unsafe {
+    raw_libbpf::bpf_attach_kprobe(
+      prog.fd.as_raw_fd(),
+      to_probe_attach_type(attach_type),
+      ev_name,
+      fn_name,
+      fn_offset.unwrap_or(0),
+    )
+  };
+
+  if kprobe_fd >= 0 {
+    let file = unsafe { File::from_raw_fd(kprobe_fd) };
+    Ok(Kprobe { fd: file })
+  } else if kprobe_fd == -1 {
+    Err(io::Error::last_os_error())
+  } else {
+    panic!("Unexpected value from bpf_attach_kprobe(): {}", kprobe_fd)
+  }
+}
+
+fn to_probe_attach_type(
+  bpf_probe_attach_type: BpfProbeAttachType,
+) -> raw_libbpf::bpf_probe_attach_type {
+  match bpf_probe_attach_type {
+    BpfProbeAttachType::Entry => raw_libbpf::bpf_probe_attach_type_BPF_PROBE_ENTRY,
+    BpfProbeAttachType::Return => raw_libbpf::bpf_probe_attach_type_BPF_PROBE_RETURN,
   }
 }
