@@ -17,8 +17,12 @@ fn main() {
     .header("wrapper.h")
     .rustfmt_bindings(true)
     .whitelist_type("bpf_map_type")
+    .whitelist_type("bpf_prog_type")
     .whitelist_function("bpf_create_map")
+    .whitelist_function("bpf_prog_load")
     .whitelist_var("bpf_map_type_.*")
+    .whitelist_var("LINUX_VERSION_CODE_CONST")
+    .whitelist_var("LOG_BUF_SIZE_CONST")
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.

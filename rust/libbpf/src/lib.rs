@@ -3,7 +3,9 @@ mod raw_libbpf;
 use std::ffi::CString;
 use std::fs::File;
 use std::io;
+use std::mem;
 use std::mem::size_of;
+use std::os::raw::c_char;
 use std::os::raw::c_int;
 use std::os::unix::io::FromRawFd;
 
@@ -58,8 +60,68 @@ fn to_map_type(bpf_map_type: BpfMapType) -> raw_libbpf::bpf_map_type {
   }
 }
 
+pub enum BpfProgType {
+  Unspec,
+  SocketFilter,
+  Kprobe,
+  SchedCls,
+  SchedAct,
+  Tracepoint,
+  Xdp,
+  PerfEvent,
+  CgroupSkb,
+  CgroupSock,
+  LwtIn,
+  LwtOut,
+  LwtXmit,
+  SockOps,
+  SkSkb,
+  CgroupDevice,
+  SkMsg,
+  RawTracepoint,
+  CgroupSockAddr,
+  LwtSeg6Local,
+  LircMode2,
+  SkReuseport,
+}
+
+fn to_prog_type(bpf_prog_type: BpfProgType) -> raw_libbpf::bpf_prog_type {
+  #![allow(non_snake_case)]
+  match bpf_prog_type {
+    BpfProgType::Unspec => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_UNSPEC,
+    BpfProgType::SocketFilter => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SOCKET_FILTER,
+    BpfProgType::Kprobe => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_KPROBE,
+    BpfProgType::SchedCls => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SCHED_CLS,
+    BpfProgType::SchedAct => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SCHED_ACT,
+    BpfProgType::Tracepoint => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_TRACEPOINT,
+    BpfProgType::Xdp => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_XDP,
+    BpfProgType::PerfEvent => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_PERF_EVENT,
+    BpfProgType::CgroupSkb => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_CGROUP_SKB,
+    BpfProgType::CgroupSock => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_CGROUP_SOCK,
+    BpfProgType::LwtIn => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_LWT_IN,
+    BpfProgType::LwtOut => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_LWT_OUT,
+    BpfProgType::LwtXmit => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_LWT_XMIT,
+    BpfProgType::SockOps => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SOCK_OPS,
+    BpfProgType::SkSkb => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SK_SKB,
+    BpfProgType::CgroupDevice => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_CGROUP_DEVICE,
+    BpfProgType::SkMsg => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SK_MSG,
+    BpfProgType::RawTracepoint => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_RAW_TRACEPOINT,
+    BpfProgType::CgroupSockAddr => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_CGROUP_SOCK_ADDR,
+    BpfProgType::LwtSeg6Local => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_LWT_SEG6LOCAL,
+    BpfProgType::LircMode2 => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_LIRC_MODE2,
+    BpfProgType::SkReuseport => raw_libbpf::bpf_prog_type_BPF_PROG_TYPE_SK_REUSEPORT,
+  }
+}
+
 #[derive(Debug)]
 pub struct BpfMap {
+  /// Wrap the fd as a File so that it is automatically closed when it goes out
+  /// of scope.
+  fd: File,
+}
+
+#[derive(Debug)]
+pub struct BpfProg {
   /// Wrap the fd as a File so that it is automatically closed when it goes out
   /// of scope.
   fd: File,
@@ -89,5 +151,39 @@ pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io:
     Err(io::Error::last_os_error())
   } else {
     panic!("Unexpected value from bpf_create_map(): {}", map_fd)
+  }
+}
+
+pub fn bpf_prog_load(
+  bpf_prog_type: BpfProgType,
+  insns: *const raw_libbpf::bpf_insn,
+  insn_len: c_int,
+) -> io::Result<BpfProg> {
+  let name = CString::new("not currently configurable").unwrap();
+  let license = CString::new("GPL").unwrap();
+  let prog_fd = unsafe {
+    let mut log_buf = mem::uninitialized::<[c_char; raw_libbpf::LOG_BUF_SIZE_CONST as usize]>();
+    let log_buf_size = log_buf.len() as u32;
+    raw_libbpf::bpf_prog_load(
+      to_prog_type(bpf_prog_type),
+      name.as_ptr(),
+      insns,
+      insn_len,
+      license.as_ptr(),
+      raw_libbpf::LINUX_VERSION_CODE_CONST as u32,
+      /* log_level */ 1,
+      log_buf.as_mut_ptr(),
+      log_buf_size,
+    )
+  };
+
+  // TODO: In the error case, consider dumping the contents of log_buf.
+  if prog_fd >= 0 {
+    let file = unsafe { File::from_raw_fd(prog_fd) };
+    Ok(BpfProg { fd: file })
+  } else if prog_fd == -1 {
+    Err(io::Error::last_os_error())
+  } else {
+    panic!("Unexpected value from bpf_prog_load(): {}", prog_fd)
   }
 }
