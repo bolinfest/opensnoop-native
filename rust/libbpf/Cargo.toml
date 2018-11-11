@@ -1,5 +1,5 @@
 [package]
-name = "opensnoop"
+name = "libbpf"
 version = "0.0.0"
 
 [build-dependencies]

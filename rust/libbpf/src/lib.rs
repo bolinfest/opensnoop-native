@@ -1,11 +1,9 @@
-use raw_libbpf;
+mod raw_libbpf;
+
 use std::fs::File;
 use std::io;
 use std::os::raw::c_int;
 use std::os::unix::io::FromRawFd;
-
-pub const KEY_SIZE: c_int = raw_libbpf::KEY_SIZE;
-pub const VAL_T_SIZE: c_int = raw_libbpf::VAL_T_SIZE;
 
 pub enum BpfMapType {
   Unspec,

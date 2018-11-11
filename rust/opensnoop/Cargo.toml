@@ -1,0 +1,9 @@
+[package]
+name = "opensnoop"
+version = "0.0.0"
+
+[dependencies]
+libbpf = { path = "../libbpf" }
+
+[build-dependencies]
+bindgen = "0.42.0"

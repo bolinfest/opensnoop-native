@@ -1,5 +1,6 @@
-pub mod libbpf;
-mod raw_libbpf;
+extern crate libbpf;
+
+mod bindings;
 
 use std::ffi::CString;
 
@@ -8,8 +9,8 @@ fn main() {
   let map_fd = libbpf::bpf_create_map(
     libbpf::BpfMapType::Hash,
     hash_map_name.as_ptr(),
-    libbpf::KEY_SIZE,
-    libbpf::VAL_T_SIZE,
+    bindings::KEY_SIZE,
+    bindings::VAL_T_SIZE,
     /* max_entries */ 10240,
     /* map_flags */ 0,
   );

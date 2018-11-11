@@ -4,10 +4,6 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-  // Note this line is not for debugging:
-  // the build will not work without it!
-  println!("cargo:rustc-link-lib=bpf");
-
   // The bindgen::Builder is the main entry point
   // to bindgen, and lets you build up options for
   // the resulting bindings.
@@ -16,9 +12,6 @@ fn main() {
     // bindings for.
     .header("wrapper.h")
     .rustfmt_bindings(true)
-    .whitelist_type("bpf_map_type")
-    .whitelist_function("bpf_create_map")
-    .whitelist_var("bpf_map_type_.*")
     .whitelist_var("KEY_SIZE")
     .whitelist_var("VAL_T_SIZE")
     // Finish the builder and generate the bindings.
