@@ -12,8 +12,8 @@ fn main() {
     // bindings for.
     .header("wrapper.h")
     .rustfmt_bindings(true)
-    .whitelist_var("KEY_SIZE")
-    .whitelist_var("VAL_T_SIZE")
+    .whitelist_type("val_t")
+    .whitelist_type("data_t")
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.

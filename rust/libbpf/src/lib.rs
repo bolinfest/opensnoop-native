@@ -1,7 +1,9 @@
 mod raw_libbpf;
 
+use std::ffi::CString;
 use std::fs::File;
 use std::io;
+use std::mem::size_of;
 use std::os::raw::c_int;
 use std::os::unix::io::FromRawFd;
 
@@ -63,18 +65,16 @@ pub struct BpfMap {
   fd: File,
 }
 
-pub fn bpf_create_map(
-  bpf_map_type: BpfMapType,
-  name: *const ::std::os::raw::c_char,
-  key_size: c_int,
-  value_size: c_int,
-  max_entries: c_int,
-  map_flags: c_int,
-) -> io::Result<BpfMap> {
+pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io::Result<BpfMap> {
+  let key_size = size_of::<K>() as i32;
+  let value_size = size_of::<V>() as i32;
+  // TODO: Create a typesafe enum for map flags and make it a param.
+  let map_flags: c_int = 0;
+  let name = CString::new("not currently configurable").unwrap();
   let map_fd = unsafe {
     raw_libbpf::bpf_create_map(
       to_map_type(bpf_map_type),
-      name,
+      name.as_ptr(),
       key_size,
       value_size,
       max_entries,
