@@ -21,6 +21,7 @@ fn main() {
     .whitelist_type("bpf_prog_type")
     .whitelist_function("bpf_attach_kprobe")
     .whitelist_function("bpf_create_map")
+    .whitelist_function("bpf_open_perf_buffer")
     .whitelist_function("bpf_prog_load")
     .whitelist_var("bpf_map_type_.*")
     .whitelist_var("LINUX_VERSION_CODE_CONST")

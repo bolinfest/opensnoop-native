@@ -10,6 +10,7 @@ use generated_bytecode::NUM_TRACE_RETURN_INSTRUCTIONS;
 use libbpf::bpf_attach_kprobe;
 use libbpf::bpf_create_map;
 use libbpf::bpf_insn;
+use libbpf::bpf_open_perf_buffer;
 use libbpf::bpf_prog_load;
 use libbpf::BpfProbeAttachType;
 use libbpf::BpfProgType;
@@ -24,8 +25,8 @@ fn main() -> io::Result<()> {
   let val_map = bpf_create_map::<u64, bindings::val_t>(libbpf::BpfMapType::Hash, max_entries)?;
 
   // TODO: Implement getOnlineCpus() to determine this value.
-  let num_cpu = 16;
-  let perf_map = bpf_create_map::<i32, u32>(libbpf::BpfMapType::PerfEventArray, num_cpu)?;
+  let cpus: [i32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+  let perf_map = bpf_create_map::<i32, u32>(libbpf::BpfMapType::PerfEventArray, cpus.len() as i32)?;
 
   let mut instructions: [bpf_insn; NUM_TRACE_ENTRY_INSTRUCTIONS] = unsafe { mem::uninitialized() };
   generate_trace_entry(&mut instructions, &val_map);
@@ -57,6 +58,24 @@ fn main() -> io::Result<()> {
     CString::new("do_sys_open").unwrap().as_ptr(),
     None,
   )?;
+
+  // Open a perf buffer for each online CPU.
+  // (This is what open_perf_buffer() in bcc/table.py does.)
+  for cpu in cpus.iter() {
+    let reader = unsafe {
+      bpf_open_perf_buffer(
+        /* raw_cb */ None,
+        /* lost_cb */ None,
+        /* cb_cookie */ std::ptr::null_mut(),
+        /* pid */ -1,
+        *cpu,
+        /* page_cnt */ 64,
+      )
+    };
+    if reader.is_null() {
+      panic!("Error calling bpf_open_perf_buffer()");
+    }
+  }
 
   Ok(())
 }

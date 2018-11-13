@@ -12,6 +12,7 @@ use std::os::unix::io::AsRawFd;
 use std::os::unix::io::FromRawFd;
 
 pub use raw_libbpf::bpf_insn;
+pub use raw_libbpf::bpf_open_perf_buffer;
 
 pub enum BpfMapType {
   Unspec,
