@@ -63,6 +63,7 @@ fn main() -> io::Result<()> {
   // (This is what open_perf_buffer() in bcc/table.py does.)
   for cpu in cpus.iter() {
     let reader = unsafe {
+      // TODO: Implement raw_cb.
       bpf_open_perf_buffer(
         /* raw_cb */ None,
         /* lost_cb */ None,
