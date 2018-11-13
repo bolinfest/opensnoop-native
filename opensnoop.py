@@ -68,10 +68,11 @@ def gen_c(name, bpf_fn, filter_value="", placeholder=None):
     bpf = BPF(text=bpf_text_template.replace("FILTER", filter_value))
     bytecode = bpf.dump_func(bpf_fn)
     bpf.cleanup()  # Reset fds before next BPF is created.
-    return (
-        generate_c_function(name, bytecode, placeholder=placeholder),
-        len(bytecode) / 8,
+    num_insns = len(bytecode) / 8
+    c_code, rust_code = generate_c_function(
+        name, bytecode, num_insns, placeholder=placeholder
     )
+    return c_code, rust_code, num_insns
 
 
 PLACEHOLDER_TID = 123456
@@ -80,20 +81,20 @@ PLACEHOLDER_PID = 654321
 # Note that we cannot call gen_c() while another file is open
 # (such as generated_bytecode.h) or else it will throw off the
 # file descriptor numbers in the generated code.
-entry, entry_size = gen_c("generate_trace_entry", "trace_entry")
-entry_tid, entry_tid_size = gen_c(
+c_entry, rust_entry, entry_size, = gen_c("generate_trace_entry", "trace_entry")
+c_entry_tid, rust_entry_tid, entry_tid_size = gen_c(
     "generate_trace_entry_tid",
     "trace_entry",
     filter_value="if (tid != %d) { return 0; }" % PLACEHOLDER_TID,
     placeholder={"param_type": "int", "param_name": "tid", "imm": PLACEHOLDER_TID},
 )
-entry_pid, entry_pid_size = gen_c(
+c_entry_pid, rust_entry_pid, entry_pid_size = gen_c(
     "generate_trace_entry_pid",
     "trace_entry",
     filter_value="if (pid != %d) { return 0; }" % PLACEHOLDER_PID,
     placeholder={"param_type": "int", "param_name": "pid", "imm": PLACEHOLDER_PID},
 )
-ret, ret_size = gen_c("generate_trace_return", "trace_return")
+c_ret, rust_ret, ret_size = gen_c("generate_trace_return", "trace_return")
 
 c_file = (
     (
@@ -117,12 +118,43 @@ c_file = (
             ret_size,
         )
     )
-    + entry
-    + entry_tid
-    + entry_pid
-    + ret
+    + c_entry
+    + c_entry_tid
+    + c_entry_pid
+    + c_ret
 )
 
 __dir = os.path.dirname(os.path.realpath(__file__))
 with open(os.path.join(__dir, "generated_bytecode.h"), "w") as f:
     f.write(c_file)
+
+rust_file = (
+    (
+        """\
+// GENERATED FILE: See opensnoop.py.
+extern crate libbpf;
+
+use libbpf::BpfMap;
+
+// pub const MAX_NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
+pub const NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
+// pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = %d;
+// pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = %d;
+pub const NUM_TRACE_RETURN_INSTRUCTIONS: usize = %d;
+"""
+        % (
+            max(entry_size, entry_tid_size, entry_pid_size),
+            entry_size,
+            entry_tid_size,
+            entry_pid_size,
+            ret_size,
+        )
+    )
+    + rust_entry
+    #    + rust_entry_tid
+    #    + rust_entry_pid
+    + rust_ret
+)
+
+with open(os.path.join(__dir, "rust/opensnoop/src/generated_bytecode.rs"), "w") as f:
+    f.write(rust_file)

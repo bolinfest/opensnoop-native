@@ -11,6 +11,8 @@ use std::os::raw::c_int;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::io::FromRawFd;
 
+pub use raw_libbpf::bpf_insn;
+
 pub enum BpfMapType {
   Unspec,
   Hash,
@@ -67,6 +69,12 @@ pub struct BpfMap {
   /// Wrap the fd as a File so that it is automatically closed when it goes out
   /// of scope.
   fd: File,
+}
+
+impl BpfMap {
+  pub fn fd(&self) -> i32 {
+    self.fd.as_raw_fd()
+  }
 }
 
 pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io::Result<BpfMap> {

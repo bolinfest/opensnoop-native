@@ -182,7 +182,7 @@ struct bpf_insn %s[] = {
 # Note imm is normally an integer, though
 # generate_c_function() has a special case
 # where it is a variable name.
-insn_assign_template = """\
+c_insn_assign_template = """\
   instructions[%d] = (struct bpf_insn) {
       .code    = 0x%x,
       .dst_reg = BPF_REG_%d,
@@ -192,15 +192,31 @@ insn_assign_template = """\
   };
 """
 
+rust_insn_assign_template = """\
+  instructions[%d] = libbpf::bpf_insn {
+      code: 0x%x,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(%d, %d),
+      off: %d,
+      imm: %s,
+  };
+"""
+
 c_function_template = """\
 void %s(struct bpf_insn instructions[]%s) {
 %s}
 
 """
 
+rust_function_template = """\
+pub fn %s(instructions: &mut [libbpf::bpf_insn]%s) -> () {
+%s}
 
-def generate_c_function(fn_name, bytecode, placeholder=None):
-    assigns = []
+"""
+
+
+def generate_c_function(fn_name, bytecode, num_insns, placeholder=None):
+    c_assigns = []
+    rust_assigns = []
     fds = set()
     for index, instruction in get_list_of_instructions(bytecode):
         opcode, dst_reg, src_reg, offset, imm = parse_instruction(instruction)
@@ -211,19 +227,41 @@ def generate_c_function(fn_name, bytecode, placeholder=None):
             fd = imm
             fds.add(fd)
             imm = "fd%d" % fd
+            rust_imm = "%s.fd()" % imm
         elif placeholder and imm == placeholder["imm"]:
             imm = placeholder["param_name"]
-        assigns.append(
-            insn_assign_template % (index, opcode, dst_reg, src_reg, offset, imm)
+            rust_imm = imm
+        else:
+            rust_imm = imm
+        c_assigns.append(
+            c_insn_assign_template % (index, opcode, dst_reg, src_reg, offset, imm)
+        )
+        rust_assigns.append(
+            rust_insn_assign_template
+            % (index, opcode, dst_reg, src_reg, offset, rust_imm)
         )
 
-    sig = ""
+    c_sig = ""
+    rust_sig = ""
     if placeholder:
-        sig += ", %s %s" % (placeholder["param_type"], placeholder["param_name"])
+        param_type = placeholder["param_type"]
+        param_name = placeholder["param_name"]
+        c_sig += ", %s %s" % (param_type, param_name)
+        rust_sig += ", %s: %s" % (param_name, to_rust_type(param_type))
     if fds:
         sorted_fds = list(fds)
         sorted_fds.sort()
-        params = [", int fd%d" % fd for fd in sorted_fds]
-        sig += "".join(params)
-    code = c_function_template % (fn_name, sig, "".join(assigns))
-    return code
+        c_params = [", int fd%d" % fd for fd in sorted_fds]
+        c_sig += "".join(c_params)
+        rust_params = [", fd%d: &BpfMap" % fd for fd in sorted_fds]
+        rust_sig += "".join(rust_params)
+    c_code = c_function_template % (fn_name, c_sig, "".join(c_assigns))
+    rust_code = rust_function_template % (fn_name, rust_sig, "".join(rust_assigns))
+    return c_code, rust_code
+
+
+def to_rust_type(type_name):
+    if type_name == "int":
+        return "i32"
+    else:
+        raise Exception("Unknown type_name: %s" % type_name)
