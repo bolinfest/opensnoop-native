@@ -86,14 +86,7 @@ pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io:
     )
   };
 
-  if map_fd >= 0 {
-    let file = unsafe { File::from_raw_fd(map_fd) };
-    Ok(BpfMap { fd: file })
-  } else if map_fd == -1 {
-    Err(io::Error::last_os_error())
-  } else {
-    panic!("Unexpected value from bpf_create_map(): {}", map_fd)
-  }
+  fd_to_file(map_fd, "bpf_create_map").map(|fd| BpfMap { fd })
 }
 
 pub enum BpfProgType {
@@ -180,14 +173,7 @@ pub fn bpf_prog_load(
   };
 
   // TODO: In the error case, consider dumping the contents of log_buf.
-  if prog_fd >= 0 {
-    let file = unsafe { File::from_raw_fd(prog_fd) };
-    Ok(BpfProg { fd: file })
-  } else if prog_fd == -1 {
-    Err(io::Error::last_os_error())
-  } else {
-    panic!("Unexpected value from bpf_prog_load(): {}", prog_fd)
-  }
+  fd_to_file(prog_fd, "bpf_prog_load").map(|fd| BpfProg { fd })
 }
 
 pub enum BpfProbeAttachType {
@@ -219,14 +205,7 @@ pub fn bpf_attach_kprobe(
     )
   };
 
-  if kprobe_fd >= 0 {
-    let file = unsafe { File::from_raw_fd(kprobe_fd) };
-    Ok(Kprobe { fd: file })
-  } else if kprobe_fd == -1 {
-    Err(io::Error::last_os_error())
-  } else {
-    panic!("Unexpected value from bpf_attach_kprobe(): {}", kprobe_fd)
-  }
+  fd_to_file(kprobe_fd, "bpf_attach_kprobe").map(|fd| Kprobe { fd })
 }
 
 fn to_probe_attach_type(
@@ -235,5 +214,16 @@ fn to_probe_attach_type(
   match bpf_probe_attach_type {
     BpfProbeAttachType::Entry => raw_libbpf::bpf_probe_attach_type_BPF_PROBE_ENTRY,
     BpfProbeAttachType::Return => raw_libbpf::bpf_probe_attach_type_BPF_PROBE_RETURN,
+  }
+}
+
+fn fd_to_file(fd: c_int, fn_name: &str) -> io::Result<File> {
+  if fd >= 0 {
+    let file = unsafe { File::from_raw_fd(fd) };
+    Ok(file)
+  } else if fd == -1 {
+    Err(io::Error::last_os_error())
+  } else {
+    panic!("Unexpected value from {}(): {}", fn_name, fd)
   }
 }
