@@ -12,6 +12,9 @@ use libbpf::bpf_create_map;
 use libbpf::bpf_insn;
 use libbpf::bpf_open_perf_buffer;
 use libbpf::bpf_prog_load;
+use libbpf::bpf_update_elem;
+use libbpf::perf_reader_fd;
+use libbpf::perf_reader_poll;
 use libbpf::BpfProbeAttachType;
 use libbpf::BpfProgType;
 use std::ffi::CString;
@@ -59,6 +62,8 @@ fn main() -> io::Result<()> {
     None,
   )?;
 
+  let mut readers: Vec<*mut libbpf::perf_reader> = Vec::new();
+
   // Open a perf buffer for each online CPU.
   // (This is what open_perf_buffer() in bcc/table.py does.)
   for cpu in cpus.iter() {
@@ -76,7 +81,32 @@ fn main() -> io::Result<()> {
     if reader.is_null() {
       panic!("Error calling bpf_open_perf_buffer()");
     }
+
+    let perf_reader_fd = unsafe { perf_reader_fd(reader as *mut libbpf::perf_reader) };
+    readers.push(reader as *mut libbpf::perf_reader);
+    let rc = unsafe {
+      bpf_update_elem(
+        perf_map.fd(),
+        *cpu as *mut std::ffi::c_void,
+        perf_reader_fd as *mut std::ffi::c_void,
+        libbpf::BPF_ANY,
+      )
+    };
+    check_unix_error(rc)?;
   }
 
-  Ok(())
+  loop {
+    let rc = unsafe { perf_reader_poll(cpus.len() as i32, readers.as_mut_ptr(), -1) };
+    check_unix_error(rc)?;
+  }
+
+  // Ok(())
+}
+
+fn check_unix_error(rc: c_int) -> io::Result<()> {
+  if rc == -1 {
+    Err(io::Error::last_os_error())
+  } else {
+    Ok(())
+  }
 }

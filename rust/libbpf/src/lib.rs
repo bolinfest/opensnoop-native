@@ -13,6 +13,11 @@ use std::os::unix::io::FromRawFd;
 
 pub use raw_libbpf::bpf_insn;
 pub use raw_libbpf::bpf_open_perf_buffer;
+pub use raw_libbpf::bpf_update_elem;
+pub use raw_libbpf::perf_reader;
+pub use raw_libbpf::perf_reader_fd;
+pub use raw_libbpf::perf_reader_poll;
+pub const BPF_ANY: u64 = raw_libbpf::BPF_ANY_CONST as u64;
 
 pub enum BpfMapType {
   Unspec,

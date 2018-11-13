@@ -23,7 +23,11 @@ fn main() {
     .whitelist_function("bpf_create_map")
     .whitelist_function("bpf_open_perf_buffer")
     .whitelist_function("bpf_prog_load")
+    .whitelist_function("bpf_update_elem")
+    .whitelist_function("perf_reader_fd")
+    .whitelist_function("perf_reader_poll")
     .whitelist_var("bpf_map_type_.*")
+    .whitelist_var("BPF_ANY_CONST")
     .whitelist_var("LINUX_VERSION_CODE_CONST")
     .whitelist_var("LOG_BUF_SIZE_CONST")
     // Finish the builder and generate the bindings.
