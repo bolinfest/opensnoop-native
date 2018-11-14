@@ -63,7 +63,7 @@ fn main() -> io::Result<()> {
     None,
   )?;
 
-  let mut readers: Vec<*mut libbpf::perf_reader> = Vec::new();
+  let mut readers: Vec<*mut libbpf::perf_reader> = Vec::with_capacity(cpus.len());
 
   // Open a perf buffer for each online CPU.
   // (This is what open_perf_buffer() in bcc/table.py does.)
