@@ -23,12 +23,19 @@ use std::mem;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
 
+// Next steps:
+// - Support command-line flags.
+// - Make perf_reader_raw_callback a closure that captures relevant flags.
+// - Refactor main() so it is not one enormous fn.
+// - Add support for -f.
+// - Add perf_reader_free() cleanup.
+// - Implement getOnlineCpus() to determine this value.
+
 fn main() -> io::Result<()> {
   // This value comes from the BPF_HASH() macro in bcc.
   let max_entries = 10240;
   let val_map = bpf_create_map::<u64, bindings::val_t>(libbpf::BpfMapType::Hash, max_entries)?;
 
-  // TODO: Implement getOnlineCpus() to determine this value.
   let cpus: [i32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
   let perf_map = bpf_create_map::<i32, u32>(libbpf::BpfMapType::PerfEventArray, cpus.len() as i32)?;
 
