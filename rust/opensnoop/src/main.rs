@@ -21,6 +21,7 @@ use std::ffi::CString;
 use std::io;
 use std::mem;
 use std::os::raw::c_int;
+use std::os::raw::c_void;
 
 fn main() -> io::Result<()> {
   // This value comes from the BPF_HASH() macro in bcc.
@@ -66,15 +67,15 @@ fn main() -> io::Result<()> {
 
   // Open a perf buffer for each online CPU.
   // (This is what open_perf_buffer() in bcc/table.py does.)
-  for cpu in cpus.iter() {
+  for i in 0..cpus.len() {
+    let cpu = cpus[i];
     let reader = unsafe {
-      // TODO: Implement raw_cb.
       bpf_open_perf_buffer(
-        /* raw_cb */ None,
+        /* raw_cb */ Some(perf_reader_raw_callback),
         /* lost_cb */ None,
         /* cb_cookie */ std::ptr::null_mut(),
         /* pid */ -1,
-        *cpu,
+        cpu,
         /* page_cnt */ 64,
       )
     };
@@ -82,18 +83,25 @@ fn main() -> io::Result<()> {
       panic!("Error calling bpf_open_perf_buffer()");
     }
 
-    let perf_reader_fd = unsafe { perf_reader_fd(reader as *mut libbpf::perf_reader) };
+    let mut perf_reader_fd = unsafe { perf_reader_fd(reader as *mut libbpf::perf_reader) };
     readers.push(reader as *mut libbpf::perf_reader);
+    // https://stackoverflow.com/q/34691267/396304
+    let perf_reader_fd_ptr = &mut perf_reader_fd as *mut _ as *mut std::ffi::c_void;
     let rc = unsafe {
       bpf_update_elem(
         perf_map.fd(),
-        *cpu as *mut std::ffi::c_void,
-        perf_reader_fd as *mut std::ffi::c_void,
+        (cpus.as_ptr().offset(i as isize)) as *mut std::ffi::c_void,
+        perf_reader_fd_ptr,
         libbpf::BPF_ANY,
       )
     };
     check_unix_error(rc)?;
   }
+
+  println!(
+    "{:6} {:16} {:4} {:3} {}",
+    "PID", "COMM", "FD", "ERR", "PATH"
+  );
 
   loop {
     let rc = unsafe { perf_reader_poll(cpus.len() as i32, readers.as_mut_ptr(), -1) };
@@ -101,6 +109,28 @@ fn main() -> io::Result<()> {
   }
 
   // Ok(())
+}
+
+extern "C" fn perf_reader_raw_callback(
+  _cb_cookie: *mut c_void,
+  raw: *mut c_void,
+  _raw_size: c_int,
+) {
+  let event = raw as *mut bindings::data_t;
+
+  let ret = unsafe { (*event).ret };
+  let (fd_s, err) = if ret >= 0 { (ret, 0) } else { (-1, -ret) };
+
+  let (id, comm, fname) = unsafe { ((*event).id, (*event).comm, (*event).fname) };
+  let pid = id >> 32;
+  println!(
+    "{:6} {:16} {:4} {:3} {}",
+    pid,
+    (unsafe { std::ffi::CStr::from_ptr(comm.as_ptr()) }).to_string_lossy(),
+    fd_s,
+    err,
+    (unsafe { std::ffi::CStr::from_ptr(fname.as_ptr()) }).to_string_lossy(),
+  );
 }
 
 fn check_unix_error(rc: c_int) -> io::Result<()> {

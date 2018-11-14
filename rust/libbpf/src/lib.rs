@@ -170,14 +170,19 @@ pub fn bpf_prog_load(
 ) -> io::Result<BpfProg> {
   let name = CString::new("not currently configurable").unwrap();
   let license = CString::new("GPL").unwrap();
+  let mut log_buf =
+    unsafe { mem::uninitialized::<[c_char; raw_libbpf::LOG_BUF_SIZE_CONST as usize]>() };
+
+  // Make sure the first character is \0 so strlen(log_buf) is 0 if nothing is written.
+  log_buf[0] = 0;
+
   let prog_fd = unsafe {
-    let mut log_buf = mem::uninitialized::<[c_char; raw_libbpf::LOG_BUF_SIZE_CONST as usize]>();
     let log_buf_size = log_buf.len() as u32;
     raw_libbpf::bpf_prog_load(
       to_prog_type(bpf_prog_type),
       name.as_ptr(),
       insns,
-      insn_len,
+      insn_len * (size_of::<raw_libbpf::bpf_insn>() as i32),
       license.as_ptr(),
       raw_libbpf::LINUX_VERSION_CODE_CONST as u32,
       /* log_level */ 1,
@@ -186,8 +191,13 @@ pub fn bpf_prog_load(
     )
   };
 
-  // TODO: In the error case, consider dumping the contents of log_buf.
-  fd_to_file(prog_fd, "bpf_prog_load").map(|fd| BpfProg { fd })
+  match fd_to_file(prog_fd, "bpf_prog_load") {
+    Ok(fd) => Ok(BpfProg { fd }),
+    Err(e) => {
+      let log_msg = unsafe { std::ffi::CStr::from_ptr(log_buf.as_ptr()) };
+      Err(io::Error::new(e.kind(), log_msg.to_string_lossy()))
+    }
+  }
 }
 
 pub enum BpfProbeAttachType {
