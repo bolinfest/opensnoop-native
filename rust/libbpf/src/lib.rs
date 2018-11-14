@@ -166,7 +166,7 @@ pub struct BpfProg {
 pub fn bpf_prog_load(
   bpf_prog_type: BpfProgType,
   insns: *const raw_libbpf::bpf_insn,
-  insn_len: c_int,
+  insns_count: c_int,
 ) -> io::Result<BpfProg> {
   let name = CString::new("not currently configurable").unwrap();
   let license = CString::new("GPL").unwrap();
@@ -182,7 +182,7 @@ pub fn bpf_prog_load(
       to_prog_type(bpf_prog_type),
       name.as_ptr(),
       insns,
-      insn_len * (size_of::<raw_libbpf::bpf_insn>() as i32),
+      insns_count * (size_of::<raw_libbpf::bpf_insn>() as i32),
       license.as_ptr(),
       raw_libbpf::LINUX_VERSION_CODE_CONST as u32,
       /* log_level */ 1,
