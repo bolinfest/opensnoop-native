@@ -67,15 +67,14 @@ fn main() -> io::Result<()> {
 
   // Open a perf buffer for each online CPU.
   // (This is what open_perf_buffer() in bcc/table.py does.)
-  for i in 0..cpus.len() {
-    let cpu = cpus[i];
+  for (i, cpu) in cpus.iter().enumerate() {
     let reader = unsafe {
       bpf_open_perf_buffer(
         /* raw_cb */ Some(perf_reader_raw_callback),
         /* lost_cb */ None,
         /* cb_cookie */ std::ptr::null_mut(),
         /* pid */ -1,
-        cpu,
+        *cpu,
         /* page_cnt */ 64,
       )
     };
