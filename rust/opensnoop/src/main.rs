@@ -42,7 +42,6 @@ const NANOS_PER_SECOND: f32 = 1_000_000_000.0;
 
 #[derive(StructOpt)]
 #[structopt(name = "opensnoop")]
-#[repr(C)]
 struct Options {
   #[structopt(
     long = "timestamp",
