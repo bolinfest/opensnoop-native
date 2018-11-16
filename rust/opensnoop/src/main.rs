@@ -229,7 +229,7 @@ extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void,
 
   if let Some(ref name) = options.name {
     let comm = (unsafe { std::ffi::CStr::from_ptr(event.comm.as_ptr()) }).to_string_lossy();
-    if comm.contains(name.as_str()) {
+    if !comm.contains(name.as_str()) {
       return;
     }
   }
