@@ -61,7 +61,7 @@ struct Options {
   pid: Option<u32>,
 
   #[structopt(long = "tid", short = "t", help = "trace this TID only")]
-  tid: Option<u32>,
+  tid: Option<u64>,
 
   #[structopt(
     long = "duration",
@@ -216,10 +216,14 @@ extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void,
     print!("{:<14.9}", delta as f32 / NANOS_PER_SECOND);
   }
 
-  let pid = event.id >> 32;
+  let id = if let Some(tid) = options.tid {
+    tid
+  } else {
+    event.id >> 32
+  };
   println!(
     "{:6} {:16} {:4} {:3} {}",
-    pid,
+    id,
     (unsafe { std::ffi::CStr::from_ptr(event.comm.as_ptr()) }).to_string_lossy(),
     fd_s,
     err,

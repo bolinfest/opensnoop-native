@@ -269,8 +269,13 @@ void perf_reader_raw_callback(void *cb_cookie, void *raw, int raw_size) {
     printf("%-14.9f", delta / NANOS_PER_SECOND);
   }
 
-  int pid = event->id >> 32;
-  printf("%-6d %-16s %4d %3d %s\n", pid, event->comm, fd_s, err, event->fname);
+  long long id;
+  if (opt_tid != -1) {
+    id = event->id;
+  } else {
+    id = event->id >> 32;
+  }
+  printf("%-6lld %-16s %4d %3d %s\n", id, event->comm, fd_s, err, event->fname);
 }
 
 int main(int argc, char **argv) {
