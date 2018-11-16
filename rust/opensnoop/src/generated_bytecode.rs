@@ -3,10 +3,10 @@ extern crate libbpf;
 
 use libbpf::BpfMap;
 
-// pub const MAX_NUM_TRACE_ENTRY_INSTRUCTIONS: usize = 35;
+pub const MAX_NUM_TRACE_ENTRY_INSTRUCTIONS: usize = 35;
 pub const NUM_TRACE_ENTRY_INSTRUCTIONS: usize = 28;
-// pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = 32;
-// pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = 35;
+pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = 32;
+pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = 35;
 pub const NUM_TRACE_RETURN_INSTRUCTIONS: usize = 82;
 pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
@@ -172,6 +172,414 @@ pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap)
       imm: 0,
   };
   instructions[27] = libbpf::bpf_insn {
+      code: 0x95,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 0,
+  };
+}
+
+pub fn generate_trace_entry_tid(instructions: &mut [libbpf::bpf_insn], tid: i32, fd3: &BpfMap) -> () {
+  instructions[0] = libbpf::bpf_insn {
+      code: 0x79,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(7, 1),
+      off: 104,
+      imm: 0,
+  };
+  instructions[1] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[2] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -8,
+      imm: 0,
+  };
+  instructions[3] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -16,
+      imm: 0,
+  };
+  instructions[4] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -24,
+      imm: 0,
+  };
+  instructions[5] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -32,
+      imm: 0,
+  };
+  instructions[6] = libbpf::bpf_insn {
+      code: 0x85,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 14,
+  };
+  instructions[7] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(6, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[8] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -40,
+      imm: 0,
+  };
+  instructions[9] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 6),
+      off: 0,
+      imm: 0,
+  };
+  instructions[10] = libbpf::bpf_insn {
+      code: 0x67,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: 32,
+  };
+  instructions[11] = libbpf::bpf_insn {
+      code: 0x77,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: 32,
+  };
+  instructions[12] = libbpf::bpf_insn {
+      code: 0x55,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 17,
+      imm: tid,
+  };
+  instructions[13] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 10),
+      off: 0,
+      imm: 0,
+  };
+  instructions[14] = libbpf::bpf_insn {
+      code: 0x7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: -24,
+  };
+  instructions[15] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 0),
+      off: 0,
+      imm: 16,
+  };
+  instructions[16] = libbpf::bpf_insn {
+      code: 0x85,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 16,
+  };
+  instructions[17] = libbpf::bpf_insn {
+      code: 0x67,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 32,
+  };
+  instructions[18] = libbpf::bpf_insn {
+      code: 0x77,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 32,
+  };
+  instructions[19] = libbpf::bpf_insn {
+      code: 0x55,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 10,
+      imm: 0,
+  };
+  instructions[20] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -8,
+      imm: 0,
+  };
+  instructions[21] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -32,
+      imm: 0,
+  };
+  instructions[22] = libbpf::bpf_insn {
+      code: 0x18,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
+      off: 0,
+      imm: fd3.fd(),
+  };
+  instructions[23] = libbpf::bpf_insn {
+      code: 0x0,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[24] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 10),
+      off: 0,
+      imm: 0,
+  };
+  instructions[25] = libbpf::bpf_insn {
+      code: 0x7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 0),
+      off: 0,
+      imm: -40,
+  };
+  instructions[26] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(3, 10),
+      off: 0,
+      imm: 0,
+  };
+  instructions[27] = libbpf::bpf_insn {
+      code: 0x7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(3, 0),
+      off: 0,
+      imm: -32,
+  };
+  instructions[28] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(4, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[29] = libbpf::bpf_insn {
+      code: 0x85,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 2,
+  };
+  instructions[30] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[31] = libbpf::bpf_insn {
+      code: 0x95,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 0,
+  };
+}
+
+pub fn generate_trace_entry_pid(instructions: &mut [libbpf::bpf_insn], pid: i32, fd3: &BpfMap) -> () {
+  instructions[0] = libbpf::bpf_insn {
+      code: 0x79,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(7, 1),
+      off: 104,
+      imm: 0,
+  };
+  instructions[1] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[2] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -8,
+      imm: 0,
+  };
+  instructions[3] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -16,
+      imm: 0,
+  };
+  instructions[4] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -24,
+      imm: 0,
+  };
+  instructions[5] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -32,
+      imm: 0,
+  };
+  instructions[6] = libbpf::bpf_insn {
+      code: 0x85,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 14,
+  };
+  instructions[7] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(6, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[8] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -40,
+      imm: 0,
+  };
+  instructions[9] = libbpf::bpf_insn {
+      code: 0x18,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[10] = libbpf::bpf_insn {
+      code: 0x0,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: -1,
+  };
+  instructions[11] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 6),
+      off: 0,
+      imm: 0,
+  };
+  instructions[12] = libbpf::bpf_insn {
+      code: 0x5f,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 1),
+      off: 0,
+      imm: 0,
+  };
+  instructions[13] = libbpf::bpf_insn {
+      code: 0x18,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[14] = libbpf::bpf_insn {
+      code: 0x0,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: pid,
+  };
+  instructions[15] = libbpf::bpf_insn {
+      code: 0x5d,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 1),
+      off: 17,
+      imm: 0,
+  };
+  instructions[16] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 10),
+      off: 0,
+      imm: 0,
+  };
+  instructions[17] = libbpf::bpf_insn {
+      code: 0x7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
+      off: 0,
+      imm: -24,
+  };
+  instructions[18] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 0),
+      off: 0,
+      imm: 16,
+  };
+  instructions[19] = libbpf::bpf_insn {
+      code: 0x85,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 16,
+  };
+  instructions[20] = libbpf::bpf_insn {
+      code: 0x67,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 32,
+  };
+  instructions[21] = libbpf::bpf_insn {
+      code: 0x77,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 32,
+  };
+  instructions[22] = libbpf::bpf_insn {
+      code: 0x55,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 10,
+      imm: 0,
+  };
+  instructions[23] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -8,
+      imm: 0,
+  };
+  instructions[24] = libbpf::bpf_insn {
+      code: 0x7b,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -32,
+      imm: 0,
+  };
+  instructions[25] = libbpf::bpf_insn {
+      code: 0x18,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
+      off: 0,
+      imm: fd3.fd(),
+  };
+  instructions[26] = libbpf::bpf_insn {
+      code: 0x0,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[27] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 10),
+      off: 0,
+      imm: 0,
+  };
+  instructions[28] = libbpf::bpf_insn {
+      code: 0x7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 0),
+      off: 0,
+      imm: -40,
+  };
+  instructions[29] = libbpf::bpf_insn {
+      code: 0xbf,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(3, 10),
+      off: 0,
+      imm: 0,
+  };
+  instructions[30] = libbpf::bpf_insn {
+      code: 0x7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(3, 0),
+      off: 0,
+      imm: -32,
+  };
+  instructions[31] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(4, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[32] = libbpf::bpf_insn {
+      code: 0x85,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 2,
+  };
+  instructions[33] = libbpf::bpf_insn {
+      code: 0xb7,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
+      off: 0,
+      imm: 0,
+  };
+  instructions[34] = libbpf::bpf_insn {
       code: 0x95,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
       off: 0,

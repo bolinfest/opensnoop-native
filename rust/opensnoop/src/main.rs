@@ -5,8 +5,13 @@ mod bindings;
 mod generated_bytecode;
 
 use generated_bytecode::generate_trace_entry;
+use generated_bytecode::generate_trace_entry_pid;
+use generated_bytecode::generate_trace_entry_tid;
 use generated_bytecode::generate_trace_return;
+use generated_bytecode::MAX_NUM_TRACE_ENTRY_INSTRUCTIONS;
 use generated_bytecode::NUM_TRACE_ENTRY_INSTRUCTIONS;
+use generated_bytecode::NUM_TRACE_ENTRY_PID_INSTRUCTIONS;
+use generated_bytecode::NUM_TRACE_ENTRY_TID_INSTRUCTIONS;
 use generated_bytecode::NUM_TRACE_RETURN_INSTRUCTIONS;
 use libbpf::bpf_attach_kprobe;
 use libbpf::bpf_create_map;
@@ -23,31 +28,63 @@ use std::io;
 use std::mem;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
+use structopt::StructOpt;
 
 // Next steps:
-// - Support command-line flags.
-// - Make perf_reader_raw_callback a closure that captures relevant flags.
+// - Support --duration flag.
 // - Refactor main() so it is not one enormous fn.
 // - Add support for -f.
 // - Add perf_reader_free() cleanup.
 // - Implement getOnlineCpus() to determine this value.
 
-use structopt::StructOpt;
+const NANOS_PER_SECOND: f32 = 1_000_000_000.0;
 
 #[derive(StructOpt)]
 #[structopt(name = "opensnoop")]
 #[repr(C)]
-pub struct Options {
+struct Options {
+  #[structopt(
+    long = "timestamp",
+    short = "T",
+    help = "include timestamp on output"
+  )]
+  timestamp: bool,
+
   #[structopt(
     long = "failed",
     short = "x",
     help = "only show failed opens"
   )]
   failed: bool,
+
+  #[structopt(long = "pid", short = "p", help = "trace this PID only")]
+  pid: Option<u32>,
+
+  #[structopt(long = "tid", short = "t", help = "trace this TID only")]
+  tid: Option<u32>,
+
+  #[structopt(
+    long = "duration",
+    short = "d",
+    help = "total duration of trace in seconds"
+  )]
+  duration: Option<u32>,
+
+  #[structopt(
+    long = "name",
+    short = "n",
+    help = "only print process names containing this name"
+  )]
+  name: Option<String>,
+}
+
+struct PerfReaderCallbackContext<'a> {
+  options: &'a Options,
+  initial_timestamp: u64,
 }
 
 fn main() -> io::Result<()> {
-  let mut options = Options::from_args();
+  let options = Options::from_args();
 
   // This value comes from the BPF_HASH() macro in bcc.
   let max_entries = 10240;
@@ -56,12 +93,22 @@ fn main() -> io::Result<()> {
   let cpus: [i32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
   let perf_map = bpf_create_map::<i32, u32>(libbpf::BpfMapType::PerfEventArray, cpus.len() as i32)?;
 
-  let mut instructions: [bpf_insn; NUM_TRACE_ENTRY_INSTRUCTIONS] = unsafe { mem::uninitialized() };
-  generate_trace_entry(&mut instructions, &val_map);
+  let mut instructions: [bpf_insn; MAX_NUM_TRACE_ENTRY_INSTRUCTIONS] =
+    unsafe { mem::uninitialized() };
+  let num_instructions = if let Some(tid) = options.tid {
+    generate_trace_entry_tid(&mut instructions, tid as i32, &val_map);
+    NUM_TRACE_ENTRY_TID_INSTRUCTIONS
+  } else if let Some(pid) = options.pid {
+    generate_trace_entry_pid(&mut instructions, pid as i32, &val_map);
+    NUM_TRACE_ENTRY_PID_INSTRUCTIONS
+  } else {
+    generate_trace_entry(&mut instructions, &val_map);
+    NUM_TRACE_ENTRY_INSTRUCTIONS
+  };
   let entry_prog = bpf_prog_load(
     BpfProgType::Kprobe,
     instructions.as_ptr(),
-    NUM_TRACE_ENTRY_INSTRUCTIONS as c_int,
+    num_instructions as i32,
   )?;
   let _kprobe = bpf_attach_kprobe(
     entry_prog,
@@ -87,16 +134,19 @@ fn main() -> io::Result<()> {
     None,
   )?;
 
-  let mut readers: Vec<*mut libbpf::perf_reader> = Vec::with_capacity(cpus.len());
-
   // Open a perf buffer for each online CPU.
   // (This is what open_perf_buffer() in bcc/table.py does.)
+  let mut readers: Vec<*mut libbpf::perf_reader> = Vec::with_capacity(cpus.len());
+  let mut context = PerfReaderCallbackContext {
+    options: &options,
+    initial_timestamp: 0,
+  };
   for (i, cpu) in cpus.iter().enumerate() {
     let reader = unsafe {
       bpf_open_perf_buffer(
         /* raw_cb */ Some(perf_reader_raw_callback),
         /* lost_cb */ None,
-        /* cb_cookie */ &mut options as *mut _ as *mut std::ffi::c_void,
+        /* cb_cookie */ &mut context as *mut _ as *mut std::ffi::c_void,
         /* pid */ -1,
         *cpu,
         /* page_cnt */ 64,
@@ -121,9 +171,13 @@ fn main() -> io::Result<()> {
     check_unix_error(rc)?;
   }
 
+  if options.timestamp {
+    print!("{:14}", "TIME(s)");
+  }
+  let pid_or_tid = if options.tid.is_some() { "PID" } else { "TID" };
   println!(
     "{:6} {:16} {:4} {:3} {}",
-    "PID", "COMM", "FD", "ERR", "PATH"
+    pid_or_tid, "COMM", "FD", "ERR", "PATH"
   );
 
   loop {
@@ -135,7 +189,8 @@ fn main() -> io::Result<()> {
 }
 
 extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void, _raw_size: c_int) {
-  let options = unsafe { &*(cb_cookie as *mut Options) };
+  let context = unsafe { &mut *(cb_cookie as *mut PerfReaderCallbackContext) };
+  let options = context.options;
   let event = unsafe { &*(raw as *mut bindings::data_t) };
   let ret = event.ret;
 
@@ -143,7 +198,23 @@ extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void,
     return;
   }
 
+  if let Some(ref name) = options.name {
+    let comm = (unsafe { std::ffi::CStr::from_ptr(event.comm.as_ptr()) }).to_string_lossy();
+    if comm.contains(name.as_str()) {
+      return;
+    }
+  }
+
   let (fd_s, err) = if ret >= 0 { (ret, 0) } else { (-1, -ret) };
+
+  if options.timestamp {
+    if context.initial_timestamp == 0 {
+      context.initial_timestamp = event.ts;
+    }
+
+    let delta = event.ts - context.initial_timestamp;
+    print!("{:<14.9}", delta as f32 / NANOS_PER_SECOND);
+  }
 
   let pid = event.id >> 32;
   println!(

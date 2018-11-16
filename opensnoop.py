@@ -136,10 +136,10 @@ extern crate libbpf;
 
 use libbpf::BpfMap;
 
-// pub const MAX_NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
+pub const MAX_NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
 pub const NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
-// pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = %d;
-// pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = %d;
+pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = %d;
+pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = %d;
 pub const NUM_TRACE_RETURN_INSTRUCTIONS: usize = %d;
 """
         % (
@@ -151,8 +151,8 @@ pub const NUM_TRACE_RETURN_INSTRUCTIONS: usize = %d;
         )
     )
     + rust_entry
-    #    + rust_entry_tid
-    #    + rust_entry_pid
+    + rust_entry_tid
+    + rust_entry_pid
     + rust_ret
 )
 
