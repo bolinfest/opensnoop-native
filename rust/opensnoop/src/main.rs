@@ -1,4 +1,5 @@
 extern crate libbpf;
+extern crate structopt;
 
 mod bindings;
 mod generated_bytecode;
@@ -31,7 +32,23 @@ use std::os::raw::c_void;
 // - Add perf_reader_free() cleanup.
 // - Implement getOnlineCpus() to determine this value.
 
+use structopt::StructOpt;
+
+#[derive(StructOpt)]
+#[structopt(name = "opensnoop")]
+#[repr(C)]
+pub struct Options {
+  #[structopt(
+    long = "failed",
+    short = "x",
+    help = "only show failed opens"
+  )]
+  failed: bool,
+}
+
 fn main() -> io::Result<()> {
+  let mut options = Options::from_args();
+
   // This value comes from the BPF_HASH() macro in bcc.
   let max_entries = 10240;
   let val_map = bpf_create_map::<u64, bindings::val_t>(libbpf::BpfMapType::Hash, max_entries)?;
@@ -79,7 +96,7 @@ fn main() -> io::Result<()> {
       bpf_open_perf_buffer(
         /* raw_cb */ Some(perf_reader_raw_callback),
         /* lost_cb */ None,
-        /* cb_cookie */ std::ptr::null_mut(),
+        /* cb_cookie */ &mut options as *mut _ as *mut std::ffi::c_void,
         /* pid */ -1,
         *cpu,
         /* page_cnt */ 64,
@@ -117,25 +134,25 @@ fn main() -> io::Result<()> {
   // Ok(())
 }
 
-extern "C" fn perf_reader_raw_callback(
-  _cb_cookie: *mut c_void,
-  raw: *mut c_void,
-  _raw_size: c_int,
-) {
-  let event = raw as *mut bindings::data_t;
+extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void, _raw_size: c_int) {
+  let options = unsafe { &*(cb_cookie as *mut Options) };
+  let event = unsafe { &*(raw as *mut bindings::data_t) };
+  let ret = event.ret;
 
-  let ret = unsafe { (*event).ret };
+  if options.failed && ret >= 0 {
+    return;
+  }
+
   let (fd_s, err) = if ret >= 0 { (ret, 0) } else { (-1, -ret) };
 
-  let (id, comm, fname) = unsafe { ((*event).id, (*event).comm, (*event).fname) };
-  let pid = id >> 32;
+  let pid = event.id >> 32;
   println!(
     "{:6} {:16} {:4} {:3} {}",
     pid,
-    (unsafe { std::ffi::CStr::from_ptr(comm.as_ptr()) }).to_string_lossy(),
+    (unsafe { std::ffi::CStr::from_ptr(event.comm.as_ptr()) }).to_string_lossy(),
     fd_s,
     err,
-    (unsafe { std::ffi::CStr::from_ptr(fname.as_ptr()) }).to_string_lossy(),
+    (unsafe { std::ffi::CStr::from_ptr(event.fname.as_ptr()) }).to_string_lossy(),
   );
 }
 
