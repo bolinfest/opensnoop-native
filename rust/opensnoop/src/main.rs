@@ -1,4 +1,5 @@
 extern crate libbpf;
+extern crate libc;
 extern crate structopt;
 
 mod bindings;
@@ -31,7 +32,6 @@ use std::os::raw::c_void;
 use structopt::StructOpt;
 
 // Next steps:
-// - Support --duration flag.
 // - Refactor main() so it is not one enormous fn.
 // - Add support for -f.
 // - Add perf_reader_free() cleanup.
@@ -180,12 +180,41 @@ fn main() -> io::Result<()> {
     pid_or_tid, "COMM", "FD", "ERR", "PATH"
   );
 
+  let end_time = if let Some(duration) = options.duration {
+    let mut time = libc::timespec {
+      tv_sec: 0,
+      tv_nsec: 0,
+    };
+    let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_COARSE, &mut time) };
+    check_unix_error(rc)?;
+
+    time.tv_sec += duration as i64;
+    Some(time)
+  } else {
+    None
+  };
+
   loop {
+    if let Some(end_time) = end_time {
+      let mut current_time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+      };
+      let rc = unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC_COARSE, &mut current_time) };
+      check_unix_error(rc)?;
+
+      if current_time.tv_sec > end_time.tv_sec
+        || (current_time.tv_sec == end_time.tv_sec && current_time.tv_nsec >= end_time.tv_nsec)
+      {
+        break;
+      }
+    }
+
     let rc = unsafe { perf_reader_poll(cpus.len() as i32, readers.as_mut_ptr(), -1) };
     check_unix_error(rc)?;
   }
 
-  // Ok(())
+  Ok(())
 }
 
 extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void, _raw_size: c_int) {

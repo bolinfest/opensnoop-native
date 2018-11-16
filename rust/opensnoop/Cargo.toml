@@ -3,8 +3,9 @@ name = "opensnoop"
 version = "0.0.0"
 
 [dependencies]
-structopt =  "0.2.13"
 libbpf = { path = "../libbpf" }
+libc = "0.2.43"
+structopt =  "0.2.13"
 
 [build-dependencies]
 bindgen = "0.42.0"
