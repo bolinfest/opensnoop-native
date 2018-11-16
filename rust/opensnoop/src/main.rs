@@ -25,7 +25,9 @@ use libbpf::perf_reader_poll;
 use libbpf::BpfProbeAttachType;
 use libbpf::BpfProgType;
 use std::ffi::CString;
+use std::fs::File;
 use std::io;
+use std::io::Read;
 use std::mem;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
@@ -35,7 +37,6 @@ use structopt::StructOpt;
 // - Refactor main() so it is not one enormous fn.
 // - Add support for -f.
 // - Add perf_reader_free() cleanup.
-// - Implement getOnlineCpus() to determine this value.
 
 const NANOS_PER_SECOND: f32 = 1_000_000_000.0;
 
@@ -90,7 +91,7 @@ fn main() -> io::Result<()> {
   let max_entries = 10240;
   let val_map = bpf_create_map::<u64, bindings::val_t>(libbpf::BpfMapType::Hash, max_entries)?;
 
-  let cpus: [i32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+  let cpus = get_online_cpus()?;
   let perf_map = bpf_create_map::<i32, u32>(libbpf::BpfMapType::PerfEventArray, cpus.len() as i32)?;
 
   let mut instructions: [bpf_insn; MAX_NUM_TRACE_ENTRY_INSTRUCTIONS] =
@@ -148,7 +149,7 @@ fn main() -> io::Result<()> {
         /* lost_cb */ None,
         /* cb_cookie */ &mut context as *mut _ as *mut std::ffi::c_void,
         /* pid */ -1,
-        *cpu,
+        *cpu as i32,
         /* page_cnt */ 64,
       )
     };
@@ -215,6 +216,43 @@ fn main() -> io::Result<()> {
   }
 
   Ok(())
+}
+
+fn get_online_cpus() -> io::Result<Vec<u32>> {
+  let mut f = File::open("/sys/devices/system/cpu/online")?;
+  let mut buffer = String::new();
+  f.read_to_string(&mut buffer)?;
+  Ok(read_cpu_ranges(&buffer.trim_end()))
+}
+
+fn read_cpu_ranges(cpu_ranges: &str) -> Vec<u32> {
+  let mut cpus: Vec<u32> = vec![];
+  for cpu_range in cpu_ranges.split(",") {
+    if let Some(index) = cpu_range.find("-") {
+      let start: u32 = cpu_range[..index].parse::<u32>().unwrap();
+      let end: u32 = cpu_range[(index + 1)..].parse::<u32>().unwrap();
+      for cpu in start..(end + 1) {
+        cpus.push(cpu);
+      }
+    } else {
+      let cpu = cpu_range.parse::<u32>().unwrap();
+      cpus.push(cpu);
+    }
+  }
+  cpus
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn verify_read_cpu_ranges() {
+    assert_eq!(read_cpu_ranges("1-4"), vec![1, 2, 3, 4]);
+    assert_eq!(read_cpu_ranges("1-4,9-12"), vec![1, 2, 3, 4, 9, 10, 11, 12]);
+    assert_eq!(read_cpu_ranges("7"), vec![7]);
+    assert_eq!(read_cpu_ranges("7,9-12"), vec![7, 9, 10, 11, 12]);
+  }
 }
 
 extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void, _raw_size: c_int) {
