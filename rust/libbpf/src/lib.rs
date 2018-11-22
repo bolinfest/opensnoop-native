@@ -84,12 +84,12 @@ impl BpfMap {
     &self,
     key: *mut ::std::os::raw::c_void,
     value: *mut ::std::os::raw::c_void,
-  ) -> io::Result<()> {
+  ) -> io::Result<i32> {
     let rc = unsafe {
       raw_libbpf::bpf_update_elem(self.fd(), key, value, raw_libbpf::BPF_ANY_CONST as u64)
     };
     if rc != -1 {
-      Ok(())
+      Ok(rc)
     } else {
       Err(io::Error::last_os_error())
     }
