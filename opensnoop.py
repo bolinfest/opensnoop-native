@@ -18,6 +18,10 @@ bpf_text_template = """
 BPF_HASH(infotmp, u64, struct val_t);
 BPF_PERF_OUTPUT(events);
 
+// This is a hash map, but we use it as a set of
+// process ids that are progeny of the ancestor id.
+BPF_HASH(progeny_pids, u32, u32);
+
 int trace_entry(struct pt_regs *ctx, int dfd, const char __user *filename)
 {
     struct val_t val = {};
@@ -59,6 +63,37 @@ int trace_return(struct pt_regs *ctx)
 
     return 0;
 }
+
+// IMPORTANT! Currently, this scheme only works for descendant
+// processes that are added *after* opensnoop -f is run. To fix this,
+// main.rs should insert the entire pstree into progeny_pids before
+// starting the program.
+
+int execve_entry()
+{
+    struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+    u32 ppid = task->real_parent->tgid;
+    // Note this requires that we put the PID we are following
+    // in progeny_pids before we attach any of the kprobes.
+    if (progeny_pids.lookup(&ppid) != NULL) {
+        u32 pid = bpf_get_current_pid_tgid() >> 32;
+        progeny_pids.update(&pid, &ppid);
+    }
+
+    return 0;
+}
+
+int exit_group_entry()
+{
+    // Note this does not account for child pids getting reparented if
+    // they outlive their parent. Normally, they will get reparented to 1,
+    // though apparently there are edge cases:
+    // https://unix.stackexchange.com/questions/149319/new-parent-process-when-the-parent-process-dies
+    u32 pid = bpf_get_current_pid_tgid() >> 32;
+    progeny_pids.delete(&pid);
+
+    return 0;
+}
 """
 
 
@@ -82,6 +117,17 @@ PLACEHOLDER_PID = 654321
 # (such as generated_bytecode.h) or else it will throw off the
 # file descriptor numbers in the generated code.
 c_entry, rust_entry, entry_size, = gen_c("generate_trace_entry", "trace_entry")
+c_execve_entry, rust_execve_entry, execve_entry_size, = gen_c(
+    "generate_execve_entry", "execve_entry"
+)
+c_exit_group_entry, rust_exit_group_entry, exit_group_entry_size, = gen_c(
+    "generate_exit_group_entry", "exit_group_entry"
+)
+c_entry_progeny, rust_entry_progeny, entry_progeny_size = gen_c(
+    "generate_trace_entry_progeny",
+    "trace_entry",
+    filter_value="if (progeny_pids.lookup(&pid) == NULL) { return 0; }",
+)
 c_entry_tid, rust_entry_tid, entry_tid_size = gen_c(
     "generate_trace_entry_tid",
     "trace_entry",
@@ -105,20 +151,31 @@ c_file = (
 
 #define MAX_NUM_TRACE_ENTRY_INSTRUCTIONS %d
 #define NUM_TRACE_ENTRY_INSTRUCTIONS %d
+
+#define NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS %d
+#define NUM_EXECVE_ENTRY_INSTRUCTIONS %d
+#define NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS %d
+
 #define NUM_TRACE_ENTRY_TID_INSTRUCTIONS %d
 #define NUM_TRACE_ENTRY_PID_INSTRUCTIONS %d
 #define NUM_TRACE_RETURN_INSTRUCTIONS %d
 
 """
         % (
-            max(entry_size, entry_tid_size, entry_pid_size),
+            max(entry_size, entry_progeny_size, entry_tid_size, entry_pid_size),
             entry_size,
+            entry_progeny_size,
+            execve_entry_size,
+            exit_group_entry_size,
             entry_tid_size,
             entry_pid_size,
             ret_size,
         )
     )
     + c_entry
+    + c_entry_progeny
+    + c_execve_entry
+    + c_exit_group_entry
     + c_entry_tid
     + c_entry_pid
     + c_ret
@@ -138,19 +195,30 @@ use libbpf::BpfMap;
 
 pub const MAX_NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
 pub const NUM_TRACE_ENTRY_INSTRUCTIONS: usize = %d;
+
+pub const NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS: usize = %d;
+pub const NUM_EXECVE_ENTRY_INSTRUCTIONS: usize = %d;
+pub const NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS: usize = %d;
+
 pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = %d;
 pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = %d;
 pub const NUM_TRACE_RETURN_INSTRUCTIONS: usize = %d;
 """
         % (
-            max(entry_size, entry_tid_size, entry_pid_size),
+            max(entry_size, entry_progeny_size, entry_tid_size, entry_pid_size),
             entry_size,
+            entry_progeny_size,
+            execve_entry_size,
+            exit_group_entry_size,
             entry_tid_size,
             entry_pid_size,
             ret_size,
         )
     )
     + rust_entry
+    + rust_entry_progeny
+    + rust_execve_entry
+    + rust_exit_group_entry
     + rust_entry_tid
     + rust_entry_pid
     + rust_ret

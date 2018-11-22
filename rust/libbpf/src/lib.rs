@@ -13,11 +13,9 @@ use std::os::unix::io::FromRawFd;
 
 pub use raw_libbpf::bpf_insn;
 pub use raw_libbpf::bpf_open_perf_buffer;
-pub use raw_libbpf::bpf_update_elem;
 pub use raw_libbpf::perf_reader;
 pub use raw_libbpf::perf_reader_fd;
 pub use raw_libbpf::perf_reader_poll;
-pub const BPF_ANY: u64 = raw_libbpf::BPF_ANY_CONST as u64;
 
 pub enum BpfMapType {
   Unspec,
@@ -80,6 +78,21 @@ pub struct BpfMap {
 impl BpfMap {
   pub fn fd(&self) -> i32 {
     self.fd.as_raw_fd()
+  }
+
+  pub fn update(
+    &self,
+    key: *mut ::std::os::raw::c_void,
+    value: *mut ::std::os::raw::c_void,
+  ) -> io::Result<()> {
+    let rc = unsafe {
+      raw_libbpf::bpf_update_elem(self.fd(), key, value, raw_libbpf::BPF_ANY_CONST as u64)
+    };
+    if rc != -1 {
+      Ok(())
+    } else {
+      Err(io::Error::last_os_error())
+    }
   }
 }
 
@@ -213,7 +226,7 @@ pub struct Kprobe {
 }
 
 pub fn bpf_attach_kprobe(
-  prog: BpfProg,
+  prog: &BpfProg,
   attach_type: BpfProbeAttachType,
   ev_name: *const c_char,
   fn_name: *const c_char,

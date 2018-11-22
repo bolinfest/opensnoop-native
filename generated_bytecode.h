@@ -2,8 +2,13 @@
 #include <bcc/libbpf.h>
 #include <stdlib.h>
 
-#define MAX_NUM_TRACE_ENTRY_INSTRUCTIONS 35
+#define MAX_NUM_TRACE_ENTRY_INSTRUCTIONS 37
 #define NUM_TRACE_ENTRY_INSTRUCTIONS 28
+
+#define NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS 37
+#define NUM_EXECVE_ENTRY_INSTRUCTIONS 37
+#define NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS 10
+
 #define NUM_TRACE_ENTRY_TID_INSTRUCTIONS 32
 #define NUM_TRACE_ENTRY_PID_INSTRUCTIONS 35
 #define NUM_TRACE_RETURN_INSTRUCTIONS 82
@@ -199,6 +204,603 @@ void generate_trace_entry(struct bpf_insn instructions[], int fd3) {
       .imm     = 0,
   };
   instructions[27] = (struct bpf_insn) {
+      .code    = 0x95,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+}
+
+void generate_trace_entry_progeny(struct bpf_insn instructions[], int fd3, int fd5) {
+  instructions[0] = (struct bpf_insn) {
+      .code    = 0x79,
+      .dst_reg = BPF_REG_7,
+      .src_reg = BPF_REG_1,
+      .off     = 104,
+      .imm     = 0,
+  };
+  instructions[1] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[2] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -8,
+      .imm     = 0,
+  };
+  instructions[3] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -16,
+      .imm     = 0,
+  };
+  instructions[4] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -24,
+      .imm     = 0,
+  };
+  instructions[5] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -32,
+      .imm     = 0,
+  };
+  instructions[6] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 14,
+  };
+  instructions[7] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_6,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[8] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_6,
+      .off     = -40,
+      .imm     = 0,
+  };
+  instructions[9] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_6,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[10] = (struct bpf_insn) {
+      .code    = 0x77,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 32,
+  };
+  instructions[11] = (struct bpf_insn) {
+      .code    = 0x63,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -44,
+      .imm     = 0,
+  };
+  instructions[12] = (struct bpf_insn) {
+      .code    = 0x18,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_1,
+      .off     = 0,
+      .imm     = fd5,
+  };
+  instructions[13] = (struct bpf_insn) {
+      .code    = 0x0,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[14] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[15] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -44,
+  };
+  instructions[16] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 1,
+  };
+  instructions[17] = (struct bpf_insn) {
+      .code    = 0x15,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 17,
+      .imm     = 0,
+  };
+  instructions[18] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[19] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -24,
+  };
+  instructions[20] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 16,
+  };
+  instructions[21] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 16,
+  };
+  instructions[22] = (struct bpf_insn) {
+      .code    = 0x67,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 32,
+  };
+  instructions[23] = (struct bpf_insn) {
+      .code    = 0x77,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 32,
+  };
+  instructions[24] = (struct bpf_insn) {
+      .code    = 0x55,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 10,
+      .imm     = 0,
+  };
+  instructions[25] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_7,
+      .off     = -8,
+      .imm     = 0,
+  };
+  instructions[26] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_6,
+      .off     = -32,
+      .imm     = 0,
+  };
+  instructions[27] = (struct bpf_insn) {
+      .code    = 0x18,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_1,
+      .off     = 0,
+      .imm     = fd3,
+  };
+  instructions[28] = (struct bpf_insn) {
+      .code    = 0x0,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[29] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[30] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -40,
+  };
+  instructions[31] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[32] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -32,
+  };
+  instructions[33] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_4,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[34] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 2,
+  };
+  instructions[35] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[36] = (struct bpf_insn) {
+      .code    = 0x95,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+}
+
+void generate_execve_entry(struct bpf_insn instructions[], int fd5) {
+  instructions[0] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 35,
+  };
+  instructions[1] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[2] = (struct bpf_insn) {
+      .code    = 0x63,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -4,
+      .imm     = 0,
+  };
+  instructions[3] = (struct bpf_insn) {
+      .code    = 0x7b,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -16,
+      .imm     = 0,
+  };
+  instructions[4] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 2232,
+  };
+  instructions[5] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[6] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -16,
+  };
+  instructions[7] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 8,
+  };
+  instructions[8] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[9] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 4,
+  };
+  instructions[10] = (struct bpf_insn) {
+      .code    = 0x79,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_10,
+      .off     = -16,
+      .imm     = 0,
+  };
+  instructions[11] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 2220,
+  };
+  instructions[12] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[13] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -4,
+  };
+  instructions[14] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 4,
+  };
+  instructions[15] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 4,
+  };
+  instructions[16] = (struct bpf_insn) {
+      .code    = 0x61,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_10,
+      .off     = -4,
+      .imm     = 0,
+  };
+  instructions[17] = (struct bpf_insn) {
+      .code    = 0x63,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_1,
+      .off     = -16,
+      .imm     = 0,
+  };
+  instructions[18] = (struct bpf_insn) {
+      .code    = 0x18,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_1,
+      .off     = 0,
+      .imm     = fd5,
+  };
+  instructions[19] = (struct bpf_insn) {
+      .code    = 0x0,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[20] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[21] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -16,
+  };
+  instructions[22] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 1,
+  };
+  instructions[23] = (struct bpf_insn) {
+      .code    = 0x15,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 11,
+      .imm     = 0,
+  };
+  instructions[24] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 14,
+  };
+  instructions[25] = (struct bpf_insn) {
+      .code    = 0x77,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 32,
+  };
+  instructions[26] = (struct bpf_insn) {
+      .code    = 0x63,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_0,
+      .off     = -4,
+      .imm     = 0,
+  };
+  instructions[27] = (struct bpf_insn) {
+      .code    = 0x18,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_1,
+      .off     = 0,
+      .imm     = fd5,
+  };
+  instructions[28] = (struct bpf_insn) {
+      .code    = 0x0,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[29] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[30] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -4,
+  };
+  instructions[31] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[32] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_3,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -16,
+  };
+  instructions[33] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_4,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[34] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 2,
+  };
+  instructions[35] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[36] = (struct bpf_insn) {
+      .code    = 0x95,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+}
+
+void generate_exit_group_entry(struct bpf_insn instructions[], int fd5) {
+  instructions[0] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 14,
+  };
+  instructions[1] = (struct bpf_insn) {
+      .code    = 0x77,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 32,
+  };
+  instructions[2] = (struct bpf_insn) {
+      .code    = 0x63,
+      .dst_reg = BPF_REG_10,
+      .src_reg = BPF_REG_0,
+      .off     = -4,
+      .imm     = 0,
+  };
+  instructions[3] = (struct bpf_insn) {
+      .code    = 0x18,
+      .dst_reg = BPF_REG_1,
+      .src_reg = BPF_REG_1,
+      .off     = 0,
+      .imm     = fd5,
+  };
+  instructions[4] = (struct bpf_insn) {
+      .code    = 0x0,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[5] = (struct bpf_insn) {
+      .code    = 0xbf,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_10,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[6] = (struct bpf_insn) {
+      .code    = 0x7,
+      .dst_reg = BPF_REG_2,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = -4,
+  };
+  instructions[7] = (struct bpf_insn) {
+      .code    = 0x85,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 3,
+  };
+  instructions[8] = (struct bpf_insn) {
+      .code    = 0xb7,
+      .dst_reg = BPF_REG_0,
+      .src_reg = BPF_REG_0,
+      .off     = 0,
+      .imm     = 0,
+  };
+  instructions[9] = (struct bpf_insn) {
       .code    = 0x95,
       .dst_reg = BPF_REG_0,
       .src_reg = BPF_REG_0,

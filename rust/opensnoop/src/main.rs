@@ -5,13 +5,19 @@ extern crate structopt;
 mod bindings;
 mod generated_bytecode;
 
+use generated_bytecode::generate_execve_entry;
+use generated_bytecode::generate_exit_group_entry;
 use generated_bytecode::generate_trace_entry;
 use generated_bytecode::generate_trace_entry_pid;
+use generated_bytecode::generate_trace_entry_progeny;
 use generated_bytecode::generate_trace_entry_tid;
 use generated_bytecode::generate_trace_return;
 use generated_bytecode::MAX_NUM_TRACE_ENTRY_INSTRUCTIONS;
+use generated_bytecode::NUM_EXECVE_ENTRY_INSTRUCTIONS;
+use generated_bytecode::NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS;
 use generated_bytecode::NUM_TRACE_ENTRY_INSTRUCTIONS;
 use generated_bytecode::NUM_TRACE_ENTRY_PID_INSTRUCTIONS;
+use generated_bytecode::NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS;
 use generated_bytecode::NUM_TRACE_ENTRY_TID_INSTRUCTIONS;
 use generated_bytecode::NUM_TRACE_RETURN_INSTRUCTIONS;
 use libbpf::bpf_attach_kprobe;
@@ -19,10 +25,10 @@ use libbpf::bpf_create_map;
 use libbpf::bpf_insn;
 use libbpf::bpf_open_perf_buffer;
 use libbpf::bpf_prog_load;
-use libbpf::bpf_update_elem;
 use libbpf::perf_reader_fd;
 use libbpf::perf_reader_poll;
 use libbpf::BpfProbeAttachType;
+use libbpf::BpfProg;
 use libbpf::BpfProgType;
 use std::ffi::CString;
 use std::fs::File;
@@ -31,11 +37,11 @@ use std::io::Read;
 use std::mem;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
+use std::process;
 use structopt::StructOpt;
 
 // Next steps:
 // - Refactor main() so it is not one enormous fn.
-// - Add support for -f.
 // - Add perf_reader_free() cleanup.
 
 const NANOS_PER_SECOND: f32 = 1_000_000_000.0;
@@ -76,6 +82,13 @@ struct Options {
     help = "only print process names containing this name"
   )]
   name: Option<String>,
+
+  #[structopt(
+    long = "follow",
+    short = "f",
+    help = "trace -p PID and its descendant processes"
+  )]
+  follow: bool,
 }
 
 struct PerfReaderCallbackContext<'a> {
@@ -83,8 +96,22 @@ struct PerfReaderCallbackContext<'a> {
   initial_timestamp: u64,
 }
 
+/// Maintains references to additional kprobes when --follow is specified
+/// in order to keep their fds open.
+#[allow(dead_code)]
+struct ProgenyProgs {
+  execve_prog: BpfProg,
+  execve_kprobe: libbpf::Kprobe,
+  exit_group_prog: BpfProg,
+  exit_group_kprobe: libbpf::Kprobe,
+}
+
 fn main() -> io::Result<()> {
   let options = Options::from_args();
+  if options.follow && options.pid.is_none() {
+    eprint!("Error: -p must be specified when -f is specified.\n");
+    process::exit(1);
+  }
 
   // This value comes from the BPF_HASH() macro in bcc.
   let max_entries = 10240;
@@ -93,17 +120,65 @@ fn main() -> io::Result<()> {
   let cpus = get_online_cpus()?;
   let perf_map = bpf_create_map::<i32, u32>(libbpf::BpfMapType::PerfEventArray, cpus.len() as i32)?;
 
+  let progeny_pids = bpf_create_map::<u32, u32>(libbpf::BpfMapType::Hash, max_entries)?;
+
   let mut instructions: [bpf_insn; MAX_NUM_TRACE_ENTRY_INSTRUCTIONS] =
     unsafe { mem::uninitialized() };
-  let num_instructions = if let Some(tid) = options.tid {
+  let (num_instructions, _progeny_progs) = if options.follow {
+    let mut pid = options.pid.unwrap();
+    let pid_ptr = &mut pid as *mut _ as *mut std::ffi::c_void;
+    progeny_pids.update(pid_ptr, pid_ptr)?;
+
+    let mut execve_instructions: [bpf_insn; NUM_EXECVE_ENTRY_INSTRUCTIONS] =
+      unsafe { mem::uninitialized() };
+    generate_execve_entry(&mut execve_instructions, &progeny_pids);
+    let execve_prog = bpf_prog_load(
+      BpfProgType::Kprobe,
+      execve_instructions.as_ptr(),
+      NUM_EXECVE_ENTRY_INSTRUCTIONS as i32,
+    )?;
+    let execve_kprobe = bpf_attach_kprobe(
+      &execve_prog,
+      BpfProbeAttachType::Entry,
+      CString::new("p_sys_execve").unwrap().as_ptr(),
+      CString::new("sys_execve").unwrap().as_ptr(),
+      None,
+    )?;
+
+    let mut exit_group_instructions: [bpf_insn; NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS] =
+      unsafe { mem::uninitialized() };
+    generate_exit_group_entry(&mut exit_group_instructions, &progeny_pids);
+    let exit_group_prog = bpf_prog_load(
+      BpfProgType::Kprobe,
+      exit_group_instructions.as_ptr(),
+      NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS as i32,
+    )?;
+    let exit_group_kprobe = bpf_attach_kprobe(
+      &exit_group_prog,
+      BpfProbeAttachType::Entry,
+      CString::new("p_sys_exit_group").unwrap().as_ptr(),
+      CString::new("sys_exit_group").unwrap().as_ptr(),
+      None,
+    )?;
+
+    let progs = ProgenyProgs {
+      execve_prog,
+      execve_kprobe,
+      exit_group_prog,
+      exit_group_kprobe,
+    };
+
+    generate_trace_entry_progeny(&mut instructions, &val_map, &progeny_pids);
+    (NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS, Some(progs))
+  } else if let Some(tid) = options.tid {
     generate_trace_entry_tid(&mut instructions, tid as i32, &val_map);
-    NUM_TRACE_ENTRY_TID_INSTRUCTIONS
+    (NUM_TRACE_ENTRY_TID_INSTRUCTIONS, None)
   } else if let Some(pid) = options.pid {
     generate_trace_entry_pid(&mut instructions, pid as i32, &val_map);
-    NUM_TRACE_ENTRY_PID_INSTRUCTIONS
+    (NUM_TRACE_ENTRY_PID_INSTRUCTIONS, None)
   } else {
     generate_trace_entry(&mut instructions, &val_map);
-    NUM_TRACE_ENTRY_INSTRUCTIONS
+    (NUM_TRACE_ENTRY_INSTRUCTIONS, None)
   };
   let entry_prog = bpf_prog_load(
     BpfProgType::Kprobe,
@@ -111,7 +186,7 @@ fn main() -> io::Result<()> {
     num_instructions as i32,
   )?;
   let _kprobe = bpf_attach_kprobe(
-    entry_prog,
+    &entry_prog,
     BpfProbeAttachType::Entry,
     CString::new("p_do_sys_open").unwrap().as_ptr(),
     CString::new("do_sys_open").unwrap().as_ptr(),
@@ -127,7 +202,7 @@ fn main() -> io::Result<()> {
     NUM_TRACE_RETURN_INSTRUCTIONS as c_int,
   )?;
   let _kretprobe = bpf_attach_kprobe(
-    return_prog,
+    &return_prog,
     BpfProbeAttachType::Return,
     CString::new("r_do_sys_open").unwrap().as_ptr(),
     CString::new("do_sys_open").unwrap().as_ptr(),
@@ -160,15 +235,10 @@ fn main() -> io::Result<()> {
     readers.push(reader as *mut libbpf::perf_reader);
     // https://stackoverflow.com/q/34691267/396304
     let perf_reader_fd_ptr = &mut perf_reader_fd as *mut _ as *mut std::ffi::c_void;
-    let rc = unsafe {
-      bpf_update_elem(
-        perf_map.fd(),
-        (cpus.as_ptr().offset(i as isize)) as *mut std::ffi::c_void,
-        perf_reader_fd_ptr,
-        libbpf::BPF_ANY,
-      )
-    };
-    check_unix_error(rc)?;
+    perf_map.update(
+      unsafe { (cpus.as_ptr().offset(i as isize)) } as *mut std::ffi::c_void,
+      perf_reader_fd_ptr,
+    )?;
   }
 
   if options.timestamp {
