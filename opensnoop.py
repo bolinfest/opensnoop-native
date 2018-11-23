@@ -64,11 +64,6 @@ int trace_return(struct pt_regs *ctx)
     return 0;
 }
 
-// IMPORTANT! Currently, this scheme only works for descendant
-// processes that are added *after* opensnoop -f is run. To fix this,
-// main.rs should insert the entire pstree into progeny_pids before
-// starting the program.
-
 int execve_entry()
 {
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();

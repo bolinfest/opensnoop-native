@@ -1,9 +1,11 @@
 extern crate libbpf;
 extern crate libc;
+extern crate regex;
 extern crate structopt;
 
 mod bindings;
 mod generated_bytecode;
+mod pstree;
 
 use generated_bytecode::generate_execve_entry;
 use generated_bytecode::generate_exit_group_entry;
@@ -125,9 +127,11 @@ fn main() -> io::Result<()> {
   let mut instructions: [bpf_insn; MAX_NUM_TRACE_ENTRY_INSTRUCTIONS] =
     unsafe { mem::uninitialized() };
   let (num_instructions, _progeny_progs) = if options.follow {
-    let mut pid = options.pid.unwrap();
-    let pid_ptr = &mut pid as *mut _ as *mut std::ffi::c_void;
-    progeny_pids.update(pid_ptr, pid_ptr)?;
+    for pid in pstree::get_descendants(options.pid.unwrap()) {
+      let mut pid_value = pid;
+      let pid_ptr = &mut pid_value as *mut _ as *mut std::ffi::c_void;
+      progeny_pids.update(pid_ptr, pid_ptr)?;
+    }
 
     let mut execve_instructions: [bpf_insn; NUM_EXECVE_ENTRY_INSTRUCTIONS] =
       unsafe { mem::uninitialized() };
