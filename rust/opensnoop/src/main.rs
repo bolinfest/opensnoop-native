@@ -45,6 +45,7 @@ use structopt::StructOpt;
 // Next steps:
 // - Refactor main() so it is not one enormous fn.
 // - Add perf_reader_free() cleanup.
+// - Accept args so opensnoop can spawn a process and --follow it like strace.
 
 const NANOS_PER_SECOND: f32 = 1_000_000_000.0;
 
