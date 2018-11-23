@@ -37,7 +37,7 @@ int trace_entry(struct pt_regs *ctx, int dfd, const char __user *filename)
     }
 
     return 0;
-};
+}
 
 int trace_return(struct pt_regs *ctx)
 {
