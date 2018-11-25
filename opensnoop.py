@@ -72,7 +72,8 @@ int execve_entry()
     // in progeny_pids before we attach any of the kprobes.
     if (progeny_pids.lookup(&ppid) != NULL) {
         u32 pid = bpf_get_current_pid_tgid() >> 32;
-        progeny_pids.update(&pid, &ppid);
+        u32 dummy_value = 1;
+        progeny_pids.update(&pid, &dummy_value);
     }
 
     return 0;

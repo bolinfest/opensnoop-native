@@ -128,10 +128,11 @@ fn main() -> io::Result<()> {
   let mut instructions: [bpf_insn; MAX_NUM_TRACE_ENTRY_INSTRUCTIONS] =
     unsafe { mem::uninitialized() };
   let (num_instructions, _progeny_progs) = if options.follow {
+    let mut dummy_value = 1;
     for pid in pstree::get_descendants(options.pid.unwrap()) {
       let mut pid_value = pid;
       let pid_ptr = &mut pid_value as *mut _ as *mut std::ffi::c_void;
-      progeny_pids.update(pid_ptr, pid_ptr)?;
+      progeny_pids.update(pid_ptr, &mut dummy_value as *mut _ as *mut std::ffi::c_void)?;
     }
 
     let mut execve_instructions: [bpf_insn; NUM_EXECVE_ENTRY_INSTRUCTIONS] =
