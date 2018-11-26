@@ -98,6 +98,9 @@ struct Options {
   )]
   follow: bool,
 
+  // TODO(mbolin): What is it about the way I'm using execv(2) that
+  // the command does not seem to be evaluated in the context of
+  // my $PATH? I can pass `/bin/ls` but not `ls`.
   #[structopt(name = "COMMAND")]
   command: Vec<String>,
 }
