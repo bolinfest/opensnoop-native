@@ -1,5 +1,6 @@
 extern crate libbpf;
 extern crate libc;
+extern crate nix;
 extern crate regex;
 extern crate structopt;
 
@@ -32,13 +33,17 @@ use libbpf::perf_reader_poll;
 use libbpf::BpfProbeAttachType;
 use libbpf::BpfProg;
 use libbpf::BpfProgType;
+use nix::fcntl;
+use nix::unistd;
 use std::ffi::CString;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::io::Write;
 use std::mem;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
+use std::os::unix::io::FromRawFd;
 use std::process;
 use structopt::StructOpt;
 
@@ -70,7 +75,7 @@ struct Options {
   pid: Option<u32>,
 
   #[structopt(long = "tid", short = "t", help = "trace this TID only")]
-  tid: Option<u64>,
+  tid: Option<u32>,
 
   #[structopt(
     long = "duration",
@@ -92,10 +97,36 @@ struct Options {
     help = "trace -p PID and its descendant processes"
   )]
   follow: bool,
+
+  #[structopt(name = "COMMAND")]
+  command: Vec<String>,
+}
+
+enum ProcessFilter {
+  NoFilter,
+  Pid {
+    pid: u32,
+    follow: bool,
+    fd: Option<File>,
+  },
+  Tid(u32),
+}
+
+struct DisplayOptions {
+  show_pid_header: bool,
+  timestamp: bool,
+  failed: bool,
+  duration: Option<u32>,
+  name: Option<String>,
+}
+
+struct ProcessedOptions {
+  filter: ProcessFilter,
+  display: DisplayOptions,
 }
 
 struct PerfReaderCallbackContext<'a> {
-  options: &'a Options,
+  options: &'a DisplayOptions,
   initial_timestamp: u64,
 }
 
@@ -109,12 +140,95 @@ struct ProgenyProgs {
   exit_group_kprobe: libbpf::Kprobe,
 }
 
-fn main() -> io::Result<()> {
-  let options = Options::from_args();
+fn create_process_filter(
+  options: Options,
+) -> std::result::Result<ProcessFilter, Box<std::error::Error>> {
+  // Incidentally, this function could return io::Error or nix::Error.
+  // The lack of built-in support for converting between the two is
+  // deliberate: https://github.com/nix-rust/nix/issues/613. I know I
+  // need to read the docs for the failure crate, but I haven't had a
+  // chance yet.
   if options.follow && options.pid.is_none() {
     eprint!("Error: -p must be specified when -f is specified.\n");
     process::exit(1);
   }
+
+  if !options.command.is_empty() {
+    // Spawn a subprocess and make it the PID of the returned options.
+    let pipe = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
+    match unistd::fork()? {
+      unistd::ForkResult::Parent { child, .. } => {
+        let _rc = unsafe { libc::close(pipe.0) };
+        let pid = libc::pid_t::from(child) as u32;
+        let file = unsafe { File::from_raw_fd(pipe.1) };
+        Ok(ProcessFilter::Pid {
+          pid,
+          follow: options.follow,
+          fd: Some(file),
+        })
+      }
+      unistd::ForkResult::Child => {
+        // TODO: It appears that all of this Rust code has the side-effect
+        // of triggering a bunch of open() calls, which ends up cluttering
+        // the output. We need this block to do less work and eliminate
+        // the races with the parent process.
+        let _rc = unsafe {
+          libc::close(pipe.1);
+        };
+
+        // Do not exec until the pipe is written to by the parent.
+        let mut file = unsafe { File::from_raw_fd(pipe.0) };
+        let mut buf: [u8; 1] = [0];
+        file.read_exact(&mut buf)?;
+        let _rc = unsafe {
+          libc::close(pipe.0);
+        };
+
+        // TODO(mbolin): Figure out how to eliminate the use of clone() here.
+        let (left, right) = options.command.split_first().unwrap();
+        let command = CString::new(left.clone())?;
+        let mut args: Vec<CString> = vec![command.clone()];
+        args.extend(right.iter().map(|x| CString::new(x.clone()).unwrap()));
+        unistd::execv(&command, &args)?;
+        panic!("execv should not return")
+      }
+    }
+  } else if let Some(tid) = options.tid {
+    Ok(ProcessFilter::Tid(tid))
+  } else if let Some(pid) = options.pid {
+    Ok(ProcessFilter::Pid {
+      pid,
+      follow: options.follow,
+      fd: None,
+    })
+  } else {
+    Ok(ProcessFilter::NoFilter)
+  }
+}
+
+fn process_options() -> std::result::Result<ProcessedOptions, Box<std::error::Error>> {
+  let options = Options::from_args();
+  let timestamp = options.timestamp.clone();
+  let failed = options.failed.clone();
+  let duration = options.duration.clone();
+  let name = options.name.clone();
+  let filter = create_process_filter(options)?;
+  let show_pid_header = match &filter {
+    ProcessFilter::NoFilter | ProcessFilter::Pid { .. } => true,
+    ProcessFilter::Tid(_) => false,
+  };
+  let display = DisplayOptions {
+    show_pid_header,
+    timestamp,
+    failed,
+    duration,
+    name,
+  };
+  Ok(ProcessedOptions { filter, display })
+}
+
+fn main() -> std::result::Result<(), Box<std::error::Error>> {
+  let options = process_options()?;
 
   // This value comes from the BPF_HASH() macro in bcc.
   let max_entries = 10240;
@@ -127,65 +241,71 @@ fn main() -> io::Result<()> {
 
   let mut instructions: [bpf_insn; MAX_NUM_TRACE_ENTRY_INSTRUCTIONS] =
     unsafe { mem::uninitialized() };
-  let (num_instructions, _progeny_progs) = if options.follow {
-    let mut dummy_value = 1;
-    for pid in pstree::get_descendants(options.pid.unwrap()) {
-      let mut pid_value = pid;
-      let pid_ptr = &mut pid_value as *mut _ as *mut std::ffi::c_void;
-      let value_ptr = &mut dummy_value as *mut _ as *mut std::ffi::c_void;
-      progeny_pids.update(pid_ptr, value_ptr)?;
+  let (num_instructions, _progeny_progs) = match options.filter {
+    ProcessFilter::NoFilter => {
+      generate_trace_entry(&mut instructions, &val_map);
+      (NUM_TRACE_ENTRY_INSTRUCTIONS, None)
     }
+    ProcessFilter::Tid(tid) => {
+      generate_trace_entry_tid(&mut instructions, tid as i32, &val_map);
+      (NUM_TRACE_ENTRY_TID_INSTRUCTIONS, None)
+    }
+    ProcessFilter::Pid { pid, follow, .. } => {
+      if follow {
+        let mut dummy_value = 1;
+        for pid in pstree::get_descendants(pid) {
+          let mut pid_value = pid;
+          let pid_ptr = &mut pid_value as *mut _ as *mut std::ffi::c_void;
+          let value_ptr = &mut dummy_value as *mut _ as *mut std::ffi::c_void;
+          progeny_pids.update(pid_ptr, value_ptr)?;
+        }
 
-    let mut execve_instructions: [bpf_insn; NUM_EXECVE_ENTRY_INSTRUCTIONS] =
-      unsafe { mem::uninitialized() };
-    generate_execve_entry(&mut execve_instructions, &progeny_pids);
-    let execve_prog = bpf_prog_load(
-      BpfProgType::Kprobe,
-      execve_instructions.as_ptr(),
-      NUM_EXECVE_ENTRY_INSTRUCTIONS as i32,
-    )?;
-    let execve_kprobe = bpf_attach_kprobe(
-      &execve_prog,
-      BpfProbeAttachType::Entry,
-      CString::new("p_sys_execve").unwrap().as_ptr(),
-      CString::new("sys_execve").unwrap().as_ptr(),
-      None,
-    )?;
+        let mut execve_instructions: [bpf_insn; NUM_EXECVE_ENTRY_INSTRUCTIONS] =
+          unsafe { mem::uninitialized() };
+        generate_execve_entry(&mut execve_instructions, &progeny_pids);
+        let execve_prog = bpf_prog_load(
+          BpfProgType::Kprobe,
+          execve_instructions.as_ptr(),
+          NUM_EXECVE_ENTRY_INSTRUCTIONS as i32,
+        )?;
+        let execve_kprobe = bpf_attach_kprobe(
+          &execve_prog,
+          BpfProbeAttachType::Entry,
+          CString::new("p_sys_execve").unwrap().as_ptr(),
+          CString::new("sys_execve").unwrap().as_ptr(),
+          None,
+        )?;
 
-    let mut exit_group_instructions: [bpf_insn; NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS] =
-      unsafe { mem::uninitialized() };
-    generate_exit_group_entry(&mut exit_group_instructions, &progeny_pids);
-    let exit_group_prog = bpf_prog_load(
-      BpfProgType::Kprobe,
-      exit_group_instructions.as_ptr(),
-      NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS as i32,
-    )?;
-    let exit_group_kprobe = bpf_attach_kprobe(
-      &exit_group_prog,
-      BpfProbeAttachType::Entry,
-      CString::new("p_sys_exit_group").unwrap().as_ptr(),
-      CString::new("sys_exit_group").unwrap().as_ptr(),
-      None,
-    )?;
+        let mut exit_group_instructions: [bpf_insn; NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS] =
+          unsafe { mem::uninitialized() };
+        generate_exit_group_entry(&mut exit_group_instructions, &progeny_pids);
+        let exit_group_prog = bpf_prog_load(
+          BpfProgType::Kprobe,
+          exit_group_instructions.as_ptr(),
+          NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS as i32,
+        )?;
+        let exit_group_kprobe = bpf_attach_kprobe(
+          &exit_group_prog,
+          BpfProbeAttachType::Entry,
+          CString::new("p_sys_exit_group").unwrap().as_ptr(),
+          CString::new("sys_exit_group").unwrap().as_ptr(),
+          None,
+        )?;
 
-    let progs = ProgenyProgs {
-      execve_prog,
-      execve_kprobe,
-      exit_group_prog,
-      exit_group_kprobe,
-    };
+        let progs = ProgenyProgs {
+          execve_prog,
+          execve_kprobe,
+          exit_group_prog,
+          exit_group_kprobe,
+        };
 
-    generate_trace_entry_progeny(&mut instructions, &val_map, &progeny_pids);
-    (NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS, Some(progs))
-  } else if let Some(tid) = options.tid {
-    generate_trace_entry_tid(&mut instructions, tid as i32, &val_map);
-    (NUM_TRACE_ENTRY_TID_INSTRUCTIONS, None)
-  } else if let Some(pid) = options.pid {
-    generate_trace_entry_pid(&mut instructions, pid as i32, &val_map);
-    (NUM_TRACE_ENTRY_PID_INSTRUCTIONS, None)
-  } else {
-    generate_trace_entry(&mut instructions, &val_map);
-    (NUM_TRACE_ENTRY_INSTRUCTIONS, None)
+        generate_trace_entry_progeny(&mut instructions, &val_map, &progeny_pids);
+        (NUM_TRACE_ENTRY_PROGENY_INSTRUCTIONS, Some(progs))
+      } else {
+        generate_trace_entry_pid(&mut instructions, pid as i32, &val_map);
+        (NUM_TRACE_ENTRY_PID_INSTRUCTIONS, None)
+      }
+    }
   };
   let entry_prog = bpf_prog_load(
     BpfProgType::Kprobe,
@@ -216,11 +336,22 @@ fn main() -> io::Result<()> {
     None,
   )?;
 
+  // Now that all of the probes have been attached, notify the child process, if
+  // appropriate.
+  if let ProcessFilter::Pid {
+    fd: Some(mut file), ..
+  } = options.filter
+  {
+    let buf: [u8; 1] = [1];
+    file.write_all(&buf)?;
+    // TODO: Verify that file is dropped and therefore closed here.
+  }
+
   // Open a perf buffer for each online CPU.
   // (This is what open_perf_buffer() in bcc/table.py does.)
   let mut readers: Vec<*mut libbpf::perf_reader> = Vec::with_capacity(cpus.len());
   let mut context = PerfReaderCallbackContext {
-    options: &options,
+    options: &options.display,
     initial_timestamp: 0,
   };
   for (i, cpu) in cpus.iter().enumerate() {
@@ -248,16 +379,20 @@ fn main() -> io::Result<()> {
     )?;
   }
 
-  if options.timestamp {
+  if options.display.timestamp {
     print!("{:14}", "TIME(s)");
   }
-  let pid_or_tid = if options.tid.is_some() { "PID" } else { "TID" };
+  let pid_or_tid = if options.display.show_pid_header {
+    "PID"
+  } else {
+    "TID"
+  };
   println!(
     "{:6} {:16} {:4} {:3} {}",
     pid_or_tid, "COMM", "FD", "ERR", "PATH"
   );
 
-  let end_time = if let Some(duration) = options.duration {
+  let end_time = if let Some(duration) = options.display.duration {
     let mut time = libc::timespec {
       tv_sec: 0,
       tv_nsec: 0,
@@ -271,6 +406,7 @@ fn main() -> io::Result<()> {
     None
   };
 
+  // TODO(mbolin): Also break when the process dies if user is only tracing a single process.
   loop {
     if let Some(end_time) = end_time {
       let mut current_time = libc::timespec {
@@ -359,10 +495,10 @@ extern "C" fn perf_reader_raw_callback(cb_cookie: *mut c_void, raw: *mut c_void,
     print!("{:<14.9}", delta as f32 / NANOS_PER_SECOND);
   }
 
-  let id = if let Some(tid) = options.tid {
-    tid
+  let id = if options.show_pid_header {
+    (event.id >> 32) as u32
   } else {
-    event.id >> 32
+    event.id as u32
   };
   println!(
     "{:6} {:16} {:4} {:3} {}",
