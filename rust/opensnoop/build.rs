@@ -14,6 +14,7 @@ fn main() {
     .rustfmt_bindings(true)
     .whitelist_type("val_t")
     .whitelist_type("data_t")
+    .whitelist_var("ORIG_RAX_CONST")
     // Finish the builder and generate the bindings.
     .generate()
     // Unwrap the Result and panic on failure.
