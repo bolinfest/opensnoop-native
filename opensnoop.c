@@ -304,7 +304,7 @@ int main(int argc, char **argv) {
   // Ideally, we would use uname(2) to compute kern_version at runtime so this
   // binary would not have to be rebuilt for a minor kernel upgrade, but if
   // kern_version does not match LINUX_VERSION_CODE exactly, then
-  // bpf_prog_load(BPF_PROG_TYPE_KPROBE) will fail with EINVAL:
+  // bcc_prog_load(BPF_PROG_TYPE_KPROBE) will fail with EINVAL:
   // https://github.com/torvalds/linux/blob/v4.15/kernel/bpf/syscall.c#L1140-L1142.
   // Note this issue has come up in the bcc project itself:
   // https://github.com/iovisor/bcc/commit/bfecc243fc8e822417836dd76a9b4028a5d8c2c9.
@@ -312,7 +312,7 @@ int main(int argc, char **argv) {
 
   // BPF_HASH
   const char *hashMapName = "hashMap name for debugging";
-  hashMapFd = bpf_create_map(BPF_MAP_TYPE_HASH, hashMapName,
+  hashMapFd = bcc_create_map(BPF_MAP_TYPE_HASH, hashMapName,
                              /* key_size */ sizeof(__u64),
                              /* value_size */ sizeof(struct val_t),
                              /* max_entries */ 10240,
@@ -324,7 +324,7 @@ int main(int argc, char **argv) {
 
   // BPF_PERF_OUTPUT
   const char *perfMapName = "perfMap name for debugging";
-  eventsMapFd = bpf_create_map(BPF_MAP_TYPE_PERF_EVENT_ARRAY, perfMapName,
+  eventsMapFd = bcc_create_map(BPF_MAP_TYPE_PERF_EVENT_ARRAY, perfMapName,
                                /* key_size */ sizeof(int),
                                /* value_size */ sizeof(__u32),
                                /* max_entries */ numCpu,
@@ -349,19 +349,19 @@ int main(int argc, char **argv) {
     numTraceEntryInstructions = NUM_TRACE_ENTRY_INSTRUCTIONS;
   }
 
-  entryProgFd = bpf_prog_load(
+  entryProgFd = bcc_prog_load(
       BPF_PROG_TYPE_KPROBE, prog_name_for_kprobe, trace_entry_insns,
       /* prog_len */ numTraceEntryInstructions * sizeof(struct bpf_insn),
       /* license */ "GPL", kern_version,
       /* log_level */ 1, bpf_log_buf, LOG_BUF_SIZE);
   if (entryProgFd == -1) {
-    perror("Error calling bpf_prog_load() for kretprobe");
+    perror("Error calling bcc_prog_load() for kprobe");
     goto error;
   }
 
   kprobeFd = bpf_attach_kprobe(entryProgFd, BPF_PROBE_ENTRY, "p_do_sys_open",
                                "do_sys_open",
-                               /* fn_offset */ 0);
+                               /* fn_offset */ 0, /* maxactive */ 0);
   if (kprobeFd < 0) {
     perror("Error calling bpf_attach_kprobe() for kprobe");
     goto error;
@@ -371,19 +371,19 @@ int main(int argc, char **argv) {
   struct bpf_insn trace_return_insns[NUM_TRACE_RETURN_INSTRUCTIONS];
   generate_trace_return(trace_return_insns, hashMapFd, eventsMapFd);
 
-  returnProgFd = bpf_prog_load(
+  returnProgFd = bcc_prog_load(
       BPF_PROG_TYPE_KPROBE, prog_name_for_kretprobe, trace_return_insns,
       /* prog_len */ NUM_TRACE_RETURN_INSTRUCTIONS * sizeof(struct bpf_insn),
       /* license */ "GPL", kern_version,
       /* log_level */ 1, bpf_log_buf, LOG_BUF_SIZE);
   if (returnProgFd == -1) {
-    perror("Error calling bpf_prog_load() for kretprobe");
+    perror("Error calling bcc_prog_load() for kretprobe");
     goto error;
   }
 
   kretprobeFd = bpf_attach_kprobe(returnProgFd, BPF_PROBE_RETURN,
                                   "r_do_sys_open", "do_sys_open",
-                                  /* fn_offset */ 0);
+                                  /* fn_offset */ 0, /* maxactive */ 0);
   if (kretprobeFd < 0) {
     perror("Error calling bpf_attach_kprobe() for kretprobe");
     goto error;
