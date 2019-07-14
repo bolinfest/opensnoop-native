@@ -1,31 +1,29 @@
 # opensnoop-native
 
-This is a pure C implementation of [opensnoop](
-http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html)
+This is a pure C implementation of [opensnoop](http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html)
 that uses [eBPF](https://lwn.net/Articles/740157/).
 I put together a [detailed backstory](https://bolinfest.github.io/opensnoop-native/)
 of how this came to be.
 
-The ["official" version of opensnoop that uses eBPF](
-https://github.com/iovisor/bcc/blob/master/tools/opensnoop.py) is written
+The ["official" version of opensnoop that uses eBPF](https://github.com/iovisor/bcc/blob/master/tools/opensnoop.py) is written
 in Python, as it leverages the Python bindings from the
 [BCC toolkit](https://github.com/iovisor/bcc) to dynamically generate
-the eBPF program at *runtime* by populating a template of C code
+the eBPF program at _runtime_ by populating a template of C code
 and compiling it on the fly into eBPF instructions.
 
 This version of opensnoop differs slightly, as it uses the BCC
 toolkit to generate a template for the eBPF program (as an array of eBPF
-instructions) at *build time* that can be populated directly in C.
+instructions) at _build time_ that can be populated directly in C.
 Advantages:
 
-* This implementation uses only libbpf at runtime whereas the original
+- This implementation uses only libbpf at runtime whereas the original
   uses libbcc, which is a much larger dependency.
-* Compared to the Python version, it eliminates some code that has
+- Compared to the Python version, it eliminates some code that has
   to be duplicated between the Python code and C code template.
-* It eliminates an extra division done in the eBPF program due to the
+- It eliminates an extra division done in the eBPF program due to the
   limits of numeric precision in Python.
-* Perhaps the most important difference (and the most subjective) is
-  that this standalone version is *simpler*, which makes it easier to
+- Perhaps the most important difference (and the most subjective) is
+  that this standalone version is _simpler_, which makes it easier to
   see what is going on. For example, because it is pure C, you can step
   through the entire program using `gdb`. Similarly, an `strace` of
   the pure C version is much cleaner compared to the original verison.
