@@ -48,14 +48,13 @@ BCC (the generated code is checked into the repo to make it easier
 for others to study and to build), then you can just do:
 
 ```
-$ clang opensnoop.c -O3 -o opensnoop /usr/lib/x86_64-linux-gnu/libbpf.so
+$ clang opensnoop.c -lelf -O3 -o opensnoop /usr/lib/x86_64-linux-gnu/libbpf.so
 $ sudo ./opensnoop
 ```
 
 In both cases, the version of libbpf/libbcc that you use should be
-built from https://github.com/iovisor/bcc/commit/0354d767bbd3e30c6a9d4599d0fd07fee8f1337e
-or later because that includes a critical fix that I landed to make
-this code simpler to build.
+built from https://github.com/iovisor/bcc/commit/0ec2d4fd02bfd894b3fdb44ecb175344197a33dc
+or later.
 
 ## Quirks
 
