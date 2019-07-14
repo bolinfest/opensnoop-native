@@ -13,7 +13,7 @@
 #define NUM_TRACE_ENTRY_PID_INSTRUCTIONS 35
 #define NUM_TRACE_RETURN_INSTRUCTIONS 82
 
-void generate_trace_entry(struct bpf_insn instructions[], int fd3) {
+void generate_trace_entry(struct bpf_insn instructions[], int infotmp_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0x79,
       .dst_reg = BPF_REG_7,
@@ -145,7 +145,7 @@ void generate_trace_entry(struct bpf_insn instructions[], int fd3) {
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd3,
+      .imm     = infotmp_fd,
   };
   instructions[19] = (struct bpf_insn) {
       .code    = 0x0,
@@ -212,7 +212,7 @@ void generate_trace_entry(struct bpf_insn instructions[], int fd3) {
   };
 }
 
-void generate_trace_entry_progeny(struct bpf_insn instructions[], int fd3, int fd5) {
+void generate_trace_entry_progeny(struct bpf_insn instructions[], int infotmp_fd, int progeny_pids_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0x79,
       .dst_reg = BPF_REG_7,
@@ -302,7 +302,7 @@ void generate_trace_entry_progeny(struct bpf_insn instructions[], int fd3, int f
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd5,
+      .imm     = progeny_pids_fd,
   };
   instructions[13] = (struct bpf_insn) {
       .code    = 0x0,
@@ -407,7 +407,7 @@ void generate_trace_entry_progeny(struct bpf_insn instructions[], int fd3, int f
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd3,
+      .imm     = infotmp_fd,
   };
   instructions[28] = (struct bpf_insn) {
       .code    = 0x0,
@@ -474,7 +474,7 @@ void generate_trace_entry_progeny(struct bpf_insn instructions[], int fd3, int f
   };
 }
 
-void generate_execve_entry(struct bpf_insn instructions[], int fd5) {
+void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0x85,
       .dst_reg = BPF_REG_0,
@@ -606,7 +606,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int fd5) {
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd5,
+      .imm     = progeny_pids_fd,
   };
   instructions[19] = (struct bpf_insn) {
       .code    = 0x0,
@@ -683,7 +683,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int fd5) {
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd5,
+      .imm     = progeny_pids_fd,
   };
   instructions[30] = (struct bpf_insn) {
       .code    = 0x0,
@@ -750,7 +750,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int fd5) {
   };
 }
 
-void generate_exit_group_entry(struct bpf_insn instructions[], int fd5) {
+void generate_exit_group_entry(struct bpf_insn instructions[], int progeny_pids_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0x85,
       .dst_reg = BPF_REG_0,
@@ -777,7 +777,7 @@ void generate_exit_group_entry(struct bpf_insn instructions[], int fd5) {
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd5,
+      .imm     = progeny_pids_fd,
   };
   instructions[4] = (struct bpf_insn) {
       .code    = 0x0,
@@ -823,7 +823,7 @@ void generate_exit_group_entry(struct bpf_insn instructions[], int fd5) {
   };
 }
 
-void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int fd3) {
+void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int infotmp_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0x79,
       .dst_reg = BPF_REG_7,
@@ -983,7 +983,7 @@ void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int fd3) 
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd3,
+      .imm     = infotmp_fd,
   };
   instructions[23] = (struct bpf_insn) {
       .code    = 0x0,
@@ -1050,7 +1050,7 @@ void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int fd3) 
   };
 }
 
-void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int fd3) {
+void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int infotmp_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0x79,
       .dst_reg = BPF_REG_7,
@@ -1231,7 +1231,7 @@ void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int fd3) 
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd3,
+      .imm     = infotmp_fd,
   };
   instructions[26] = (struct bpf_insn) {
       .code    = 0x0,
@@ -1298,7 +1298,7 @@ void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int fd3) 
   };
 }
 
-void generate_trace_return(struct bpf_insn instructions[], int fd3, int fd4) {
+void generate_trace_return(struct bpf_insn instructions[], int infotmp_fd, int events_fd) {
   instructions[0] = (struct bpf_insn) {
       .code    = 0xbf,
       .dst_reg = BPF_REG_6,
@@ -1605,7 +1605,7 @@ void generate_trace_return(struct bpf_insn instructions[], int fd3, int fd4) {
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd3,
+      .imm     = infotmp_fd,
   };
   instructions[44] = (struct bpf_insn) {
       .code    = 0x0,
@@ -1766,7 +1766,7 @@ void generate_trace_return(struct bpf_insn instructions[], int fd3, int fd4) {
       .dst_reg = BPF_REG_2,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd4,
+      .imm     = events_fd,
   };
   instructions[67] = (struct bpf_insn) {
       .code    = 0x0,
@@ -1829,7 +1829,7 @@ void generate_trace_return(struct bpf_insn instructions[], int fd3, int fd4) {
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_1,
       .off     = 0,
-      .imm     = fd3,
+      .imm     = infotmp_fd,
   };
   instructions[76] = (struct bpf_insn) {
       .code    = 0x0,

@@ -8,6 +8,9 @@ from bcc import (
 )
 from debug import generate_c_function
 
+# Names of the various BPF maps declared in `bpf_text_template`.
+TABLE_NAMES = ["infotmp", "events", "progeny_pids"]
+
 # define BPF program
 bpf_text_template = """
 #include <uapi/linux/ptrace.h>
@@ -96,12 +99,16 @@ int exit_group_entry()
 def gen_c(name, bpf_fn, filter_value="", placeholder=None):
     """Returns the C code for the function and the number of instructions in
     the array the C function generates."""
-    bpf = BPF(text=bpf_text_template.replace("FILTER", filter_value))
+    bpf = BPF(text=bpf_text_template.replace("FILTER", filter_value), debug=0)
     bytecode = bpf.dump_func(bpf_fn)
+    fd_to_table_name = {}
+    for sort_index, table_name in enumerate(TABLE_NAMES):
+        table = bpf.get_table(table_name)
+        fd_to_table_name[table.map_fd] = sort_index, table_name
     bpf.cleanup()  # Reset fds before next BPF is created.
     num_insns = len(bytecode) / 8
     c_code, rust_code = generate_c_function(
-        name, bytecode, num_insns, placeholder=placeholder
+        name, bytecode, num_insns, fd_to_table_name, placeholder=placeholder
     )
     return c_code, rust_code, num_insns
 

@@ -13,7 +13,7 @@ pub const NUM_EXIT_GROUP_ENTRY_INSTRUCTIONS: usize = 10;
 pub const NUM_TRACE_ENTRY_TID_INSTRUCTIONS: usize = 32;
 pub const NUM_TRACE_ENTRY_PID_INSTRUCTIONS: usize = 35;
 pub const NUM_TRACE_RETURN_INSTRUCTIONS: usize = 82;
-pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap) -> () {
+pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], infotmp_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0x79,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(7, 1),
@@ -126,7 +126,7 @@ pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap)
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd3.fd(),
+      imm: infotmp_fd.fd(),
   };
   instructions[19] = libbpf::bpf_insn {
       code: 0x0,
@@ -184,7 +184,7 @@ pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap)
   };
 }
 
-pub fn generate_trace_entry_progeny(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap, fd5: &BpfMap) -> () {
+pub fn generate_trace_entry_progeny(instructions: &mut [libbpf::bpf_insn], infotmp_fd: &BpfMap, progeny_pids_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0x79,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(7, 1),
@@ -261,7 +261,7 @@ pub fn generate_trace_entry_progeny(instructions: &mut [libbpf::bpf_insn], fd3: 
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd5.fd(),
+      imm: progeny_pids_fd.fd(),
   };
   instructions[13] = libbpf::bpf_insn {
       code: 0x0,
@@ -351,7 +351,7 @@ pub fn generate_trace_entry_progeny(instructions: &mut [libbpf::bpf_insn], fd3: 
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd3.fd(),
+      imm: infotmp_fd.fd(),
   };
   instructions[28] = libbpf::bpf_insn {
       code: 0x0,
@@ -409,7 +409,7 @@ pub fn generate_trace_entry_progeny(instructions: &mut [libbpf::bpf_insn], fd3: 
   };
 }
 
-pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], fd5: &BpfMap) -> () {
+pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0x85,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
@@ -522,7 +522,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], fd5: &BpfMap
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd5.fd(),
+      imm: progeny_pids_fd.fd(),
   };
   instructions[19] = libbpf::bpf_insn {
       code: 0x0,
@@ -588,7 +588,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], fd5: &BpfMap
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd5.fd(),
+      imm: progeny_pids_fd.fd(),
   };
   instructions[30] = libbpf::bpf_insn {
       code: 0x0,
@@ -646,7 +646,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], fd5: &BpfMap
   };
 }
 
-pub fn generate_exit_group_entry(instructions: &mut [libbpf::bpf_insn], fd5: &BpfMap) -> () {
+pub fn generate_exit_group_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0x85,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(0, 0),
@@ -669,7 +669,7 @@ pub fn generate_exit_group_entry(instructions: &mut [libbpf::bpf_insn], fd5: &Bp
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd5.fd(),
+      imm: progeny_pids_fd.fd(),
   };
   instructions[4] = libbpf::bpf_insn {
       code: 0x0,
@@ -709,7 +709,7 @@ pub fn generate_exit_group_entry(instructions: &mut [libbpf::bpf_insn], fd5: &Bp
   };
 }
 
-pub fn generate_trace_entry_tid(instructions: &mut [libbpf::bpf_insn], tid: i32, fd3: &BpfMap) -> () {
+pub fn generate_trace_entry_tid(instructions: &mut [libbpf::bpf_insn], tid: i32, infotmp_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0x79,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(7, 1),
@@ -846,7 +846,7 @@ pub fn generate_trace_entry_tid(instructions: &mut [libbpf::bpf_insn], tid: i32,
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd3.fd(),
+      imm: infotmp_fd.fd(),
   };
   instructions[23] = libbpf::bpf_insn {
       code: 0x0,
@@ -904,7 +904,7 @@ pub fn generate_trace_entry_tid(instructions: &mut [libbpf::bpf_insn], tid: i32,
   };
 }
 
-pub fn generate_trace_entry_pid(instructions: &mut [libbpf::bpf_insn], pid: i32, fd3: &BpfMap) -> () {
+pub fn generate_trace_entry_pid(instructions: &mut [libbpf::bpf_insn], pid: i32, infotmp_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0x79,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(7, 1),
@@ -1059,7 +1059,7 @@ pub fn generate_trace_entry_pid(instructions: &mut [libbpf::bpf_insn], pid: i32,
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd3.fd(),
+      imm: infotmp_fd.fd(),
   };
   instructions[26] = libbpf::bpf_insn {
       code: 0x0,
@@ -1117,7 +1117,7 @@ pub fn generate_trace_entry_pid(instructions: &mut [libbpf::bpf_insn], pid: i32,
   };
 }
 
-pub fn generate_trace_return(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap, fd4: &BpfMap) -> () {
+pub fn generate_trace_return(instructions: &mut [libbpf::bpf_insn], infotmp_fd: &BpfMap, events_fd: &BpfMap) -> () {
   instructions[0] = libbpf::bpf_insn {
       code: 0xbf,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(6, 1),
@@ -1380,7 +1380,7 @@ pub fn generate_trace_return(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd3.fd(),
+      imm: infotmp_fd.fd(),
   };
   instructions[44] = libbpf::bpf_insn {
       code: 0x0,
@@ -1518,7 +1518,7 @@ pub fn generate_trace_return(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 1),
       off: 0,
-      imm: fd4.fd(),
+      imm: events_fd.fd(),
   };
   instructions[67] = libbpf::bpf_insn {
       code: 0x0,
@@ -1572,7 +1572,7 @@ pub fn generate_trace_return(instructions: &mut [libbpf::bpf_insn], fd3: &BpfMap
       code: 0x18,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 1),
       off: 0,
-      imm: fd3.fd(),
+      imm: infotmp_fd.fd(),
   };
   instructions[76] = libbpf::bpf_insn {
       code: 0x0,

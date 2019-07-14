@@ -214,10 +214,13 @@ pub fn %s(instructions: &mut [libbpf::bpf_insn]%s) -> () {
 """
 
 
-def generate_c_function(fn_name, bytecode, num_insns, placeholder=None):
+def generate_c_function(
+    fn_name, bytecode, num_insns, fd_to_table_name, placeholder=None
+):
     c_assigns = []
     rust_assigns = []
-    fds = set()
+    bpf_map_params = set()
+    bpf_map_param_sort_index = {}
     for index, instruction in get_list_of_instructions(bytecode):
         opcode, dst_reg, src_reg, offset, imm = parse_instruction(instruction)
         # I haven't found proper documentation for ld_pseudo, but I am basing
@@ -225,9 +228,12 @@ def generate_c_function(fn_name, bytecode, num_insns, placeholder=None):
         # https://github.com/iovisor/bcc/blob/6ce918bd7030241f0598ee6b1107940bf8480085/src/cc/bcc_debug.cc#L53-L58
         if opcode == 0x18 and src_reg == 1:
             fd = imm
-            fds.add(fd)
-            imm = "fd%d" % fd
-            rust_imm = "%s.fd()" % imm
+            sort_index, table_name = fd_to_table_name[fd]
+            table_name_param = "%s_fd" % table_name
+            bpf_map_param_sort_index[table_name_param] = sort_index
+            bpf_map_params.add(table_name_param)
+            imm = table_name_param
+            rust_imm = "%s.fd()" % table_name_param
         elif placeholder and imm == placeholder["imm"]:
             imm = placeholder["param_name"]
             rust_imm = imm
@@ -248,12 +254,13 @@ def generate_c_function(fn_name, bytecode, num_insns, placeholder=None):
         param_name = placeholder["param_name"]
         c_sig += ", %s %s" % (param_type, param_name)
         rust_sig += ", %s: %s" % (param_name, to_rust_type(param_type))
-    if fds:
-        sorted_fds = list(fds)
-        sorted_fds.sort()
-        c_params = [", int fd%d" % fd for fd in sorted_fds]
+    if bpf_map_params:
+        sorted_bpf_map_params = list(bpf_map_params)
+        # Rather than sorting alphabetically, it might be nicer
+        sorted_bpf_map_params.sort(key=lambda p: bpf_map_param_sort_index[p])
+        c_params = [", int %s" % p for p in sorted_bpf_map_params]
         c_sig += "".join(c_params)
-        rust_params = [", fd%d: &BpfMap" % fd for fd in sorted_fds]
+        rust_params = [", %s: &BpfMap" % p for p in sorted_bpf_map_params]
         rust_sig += "".join(rust_params)
     c_code = c_function_template % (fn_name, c_sig, "".join(c_assigns))
     rust_code = rust_function_template % (fn_name, rust_sig, "".join(rust_assigns))
