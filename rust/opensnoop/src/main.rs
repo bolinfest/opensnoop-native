@@ -98,9 +98,6 @@ struct Options {
   )]
   follow: bool,
 
-  // TODO(mbolin): What is it about the way I'm using execv(2) that
-  // the command does not seem to be evaluated in the context of
-  // my $PATH? I can pass `/bin/ls` but not `ls`.
   #[structopt(name = "COMMAND")]
   command: Vec<String>,
 }
@@ -188,8 +185,8 @@ fn create_process_filter(
         let command = CString::new(left.clone())?;
         let mut args: Vec<CString> = vec![command.clone()];
         args.extend(right.iter().map(|x| CString::new(x.clone()).unwrap()));
-        unistd::execv(&command, &args)?;
-        panic!("execv should not return")
+        unistd::execvp(&command, &args)?;
+        panic!("execvp should not return")
       }
     }
   } else if let Some(tid) = options.tid {
