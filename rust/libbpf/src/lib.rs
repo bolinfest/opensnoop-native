@@ -103,7 +103,7 @@ pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io:
   let map_flags: c_int = 0;
   let name = CString::new("not currently configurable").unwrap();
   let map_fd = unsafe {
-    raw_libbpf::bpf_create_map(
+    raw_libbpf::bcc_create_map(
       to_map_type(bpf_map_type),
       name.as_ptr(),
       key_size,
@@ -113,7 +113,7 @@ pub fn bpf_create_map<K, V>(bpf_map_type: BpfMapType, max_entries: c_int) -> io:
     )
   };
 
-  fd_to_file(map_fd, "bpf_create_map").map(|fd| BpfMap { fd })
+  fd_to_file(map_fd, "bcc_create_map").map(|fd| BpfMap { fd })
 }
 
 pub enum BpfProgType {
@@ -191,7 +191,7 @@ pub fn bpf_prog_load(
 
   let prog_fd = unsafe {
     let log_buf_size = log_buf.len() as u32;
-    raw_libbpf::bpf_prog_load(
+    raw_libbpf::bcc_prog_load(
       to_prog_type(bpf_prog_type),
       name.as_ptr(),
       insns,
@@ -204,7 +204,7 @@ pub fn bpf_prog_load(
     )
   };
 
-  match fd_to_file(prog_fd, "bpf_prog_load") {
+  match fd_to_file(prog_fd, "bcc_prog_load") {
     Ok(fd) => Ok(BpfProg { fd }),
     Err(e) => {
       let log_msg = unsafe { std::ffi::CStr::from_ptr(log_buf.as_ptr()) };
@@ -239,6 +239,7 @@ pub fn bpf_attach_kprobe(
       ev_name,
       fn_name,
       fn_offset.unwrap_or(0),
+      /* maxactive */ 0
     )
   };
 

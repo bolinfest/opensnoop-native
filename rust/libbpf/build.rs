@@ -15,14 +15,24 @@ fn main() {
     // The input header we would like to generate
     // bindings for.
     .header("wrapper.h")
+    // The `#include <bcc/libbpf.h>` in wrapper.h should resolve to
+    // /usr/include/bcc/libbpf.h.
+    //
+    // The `#include "linux/bpf.h"` in libbpf.h should resolve to
+    // /usr/include/bcc/compat/linux/bpf.h.
+    //
+    // If not, it may pick up /usr/include/linux/bpf.h,
+    // which could be wildly outdated. On my Ubuntu 18.04 system,
+    // it says that the linux-libc-dev:amd64 package put it there.
+    .clang_arg("-I/usr/include/bcc/compat")
     .rustfmt_bindings(true)
     .whitelist_type("bpf_map_type")
     .whitelist_type("bpf_probe_attach_type")
     .whitelist_type("bpf_prog_type")
     .whitelist_function("bpf_attach_kprobe")
-    .whitelist_function("bpf_create_map")
+    .whitelist_function("bcc_create_map")
     .whitelist_function("bpf_open_perf_buffer")
-    .whitelist_function("bpf_prog_load")
+    .whitelist_function("bcc_prog_load")
     .whitelist_function("bpf_update_elem")
     .whitelist_function("perf_reader_fd")
     .whitelist_function("perf_reader_poll")
