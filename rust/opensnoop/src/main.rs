@@ -33,15 +33,17 @@ use libbpf::perf_reader_poll;
 use libbpf::BpfProbeAttachType;
 use libbpf::BpfProg;
 use libbpf::BpfProgType;
-use nix::sys::ptrace;
+use nix::fcntl;
 use nix::unistd;
 use std::ffi::CString;
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::io::Write;
 use std::mem;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
+use std::os::unix::io::FromRawFd;
 use std::process;
 use structopt::StructOpt;
 
@@ -108,9 +110,7 @@ enum ProcessFilter {
   Pid {
     pid: u32,
     follow: bool,
-    /// true if the process identified by pid was started via fork()
-    /// and is being traced by ptrace, waiting for PTRACE_DETACH.
-    needs_ptrace_detach: bool,
+    fd: Option<File>,
   },
   Tid(u32),
 }
@@ -156,52 +156,42 @@ fn create_process_filter(
     process::exit(1);
   }
 
-  // TODO(mbolin): Figure out how to eliminate the use of clone() here.
-  // Currently, we do this computation in the parent so the child process
-  // does as little work as possible between fork() and exec(). It's quite
-  // possible that this is completely unnecessary.
-  let (left, right) = options.command.split_first().unwrap();
-  let command = CString::new(left.clone())?;
-  let mut args: Vec<CString> = vec![command.clone()];
-  args.extend(right.iter().map(|x| CString::new(x.clone()).unwrap()));
-
   if !options.command.is_empty() {
     // Spawn a subprocess and make it the PID of the returned options.
+    let pipe = unistd::pipe2(fcntl::OFlag::O_CLOEXEC)?;
     match unistd::fork()? {
       unistd::ForkResult::Parent { child, .. } => {
+        let _rc = unsafe { libc::close(pipe.0) };
         let pid = libc::pid_t::from(child) as u32;
-        let wait_pid_flag = nix::sys::wait::WaitPidFlag::WSTOPPED;
-        // https://stackoverflow.com/questions/22278858/ptrace-linux-user-h-no-such-file-or-directory
-        let offset = bindings::ORIG_RAX_CONST * 8;
-        loop {
-          nix::sys::wait::waitpid(child, Some(wait_pid_flag))?;
-          // Must use ptrace::ptrace() until https://github.com/nix-rust/nix/issues/980
-          // is resolved.
-          #[allow(deprecated)]
-          let orig_rax = unsafe {
-            ptrace::ptrace(
-              ptrace::Request::PTRACE_PEEKUSER,
-              child,
-              offset as *mut std::ffi::c_void,
-              std::ptr::null_mut(),
-            )?
-          };
-          // Note 59 comes from:
-          // grep exec /usr/include/x86_64-linux-gnu/asm/unistd_64.h
-          if orig_rax == 59 {
-            break;
-          }
-        }
-
+        let file = unsafe { File::from_raw_fd(pipe.1) };
         Ok(ProcessFilter::Pid {
           pid,
           follow: options.follow,
-          needs_ptrace_detach: true,
+          fd: Some(file),
         })
       }
       unistd::ForkResult::Child => {
-        ptrace::traceme()?;
+        // TODO: It appears that all of this Rust code has the side-effect
+        // of triggering a bunch of open() calls, which ends up cluttering
+        // the output. We need this block to do less work and eliminate
+        // the races with the parent process.
+        let _rc = unsafe {
+          libc::close(pipe.1);
+        };
 
+        // Do not exec until the pipe is written to by the parent.
+        let mut file = unsafe { File::from_raw_fd(pipe.0) };
+        let mut buf: [u8; 1] = [0];
+        file.read_exact(&mut buf)?;
+        let _rc = unsafe {
+          libc::close(pipe.0);
+        };
+
+        // TODO(mbolin): Figure out how to eliminate the use of clone() here.
+        let (left, right) = options.command.split_first().unwrap();
+        let command = CString::new(left.clone())?;
+        let mut args: Vec<CString> = vec![command.clone()];
+        args.extend(right.iter().map(|x| CString::new(x.clone()).unwrap()));
         unistd::execv(&command, &args)?;
         panic!("execv should not return")
       }
@@ -212,7 +202,7 @@ fn create_process_filter(
     Ok(ProcessFilter::Pid {
       pid,
       follow: options.follow,
-      needs_ptrace_detach: false,
+      fd: None,
     })
   } else {
     Ok(ProcessFilter::NoFilter)
@@ -352,12 +342,12 @@ fn main() -> std::result::Result<(), Box<std::error::Error>> {
   // Now that all of the probes have been attached, notify the child process, if
   // appropriate.
   if let ProcessFilter::Pid {
-    needs_ptrace_detach: true,
-    pid,
-    ..
+    fd: Some(mut file), ..
   } = options.filter
   {
-    ptrace::detach(unistd::Pid::from_raw(pid as i32))?;
+    let buf: [u8; 1] = [1];
+    file.write_all(&buf)?;
+    // TODO: Verify that file is dropped and therefore closed here.
   }
 
   // Open a perf buffer for each online CPU.
