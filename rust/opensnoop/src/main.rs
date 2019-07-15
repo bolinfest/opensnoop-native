@@ -171,10 +171,6 @@ fn create_process_filter(
         })
       }
       unistd::ForkResult::Child => {
-        // TODO: It appears that all of this Rust code has the side-effect
-        // of triggering a bunch of open() calls, which ends up cluttering
-        // the output. We need this block to do less work and eliminate
-        // the races with the parent process.
         let _rc = unsafe {
           libc::close(pipe.1);
         };
