@@ -185,6 +185,7 @@ fn create_process_filter(
         let command = CString::new(left.clone())?;
         let mut args: Vec<CString> = vec![command.clone()];
         args.extend(right.iter().map(|x| CString::new(x.clone()).unwrap()));
+        // TODO(mbolin): Check for ENOENT and handle it because it is very confusing otherwise.
         unistd::execvp(&command, &args)?;
         panic!("execvp should not return")
       }
