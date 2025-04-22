@@ -4,7 +4,7 @@
 
 **tl;dr** *I rewrote [opensnoop](http://www.brendangregg.com/blog/2014-07-25/opensnoop-for-linux.html) in [C using eBPF](https://github.com/bolinfest/opensnoop-native/blob/master/opensnoop.c). This is the story of how I broke through layers of abstraction to figure out how to do it.*
 
-Recently, I was trying to debug a performance issue in [Eden](https://github.com/facebookexperimental/) with a coworker. He started spitting out things to try: “run `vmstat 1`,” “check `iostat`,” “ok, now `mpstat`,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
+Recently, I was trying to debug a performance issue in [EdenFS](https://github.com/facebook/sapling) with a coworker. He started spitting out things to try: “run `vmstat 1`,” “check `iostat`,” “ok, now `mpstat`,” etc. If you know what all of those are and how to interpret their output, then you are way ahead of me. At the time, I unquestioningly typed in the commands and stared blankly at the output, quietly nodding, waiting for my coworker to interpret the numbers and tell me what to run next.
 
 Shortly thereafter, I asked myself: “Was I out playing Frisbee in the quad the day they went over Linux performance tools in school? How am I supposed to learn this stuff? Is there one book I can read to learn what I need to know? Why are there so many commands I need to learn?” I asked around and a friend told me to look at <http://brendangregg.com/> to learn about performance engineering.
 
