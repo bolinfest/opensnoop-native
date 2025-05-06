@@ -129,15 +129,15 @@ void generate_trace_entry(struct bpf_insn instructions[], int infotmp_fd) {
   instructions[16] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_7,
-      .off     = -8,
+      .src_reg = BPF_REG_6,
+      .off     = -32,
       .imm     = 0,
   };
   instructions[17] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_6,
-      .off     = -32,
+      .src_reg = BPF_REG_7,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[18] = (struct bpf_insn) {
@@ -391,15 +391,15 @@ void generate_trace_entry_progeny(struct bpf_insn instructions[], int infotmp_fd
   instructions[25] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_7,
-      .off     = -8,
+      .src_reg = BPF_REG_6,
+      .off     = -32,
       .imm     = 0,
   };
   instructions[26] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_6,
-      .off     = -32,
+      .src_reg = BPF_REG_7,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[27] = (struct bpf_insn) {
@@ -493,7 +493,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .code    = 0x63,
       .dst_reg = BPF_REG_10,
       .src_reg = BPF_REG_1,
-      .off     = -4,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[3] = (struct bpf_insn) {
@@ -571,7 +571,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_0,
       .off     = 0,
-      .imm     = -4,
+      .imm     = -8,
   };
   instructions[14] = (struct bpf_insn) {
       .code    = 0xb7,
@@ -591,14 +591,14 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .code    = 0x61,
       .dst_reg = BPF_REG_1,
       .src_reg = BPF_REG_10,
-      .off     = -4,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[17] = (struct bpf_insn) {
       .code    = 0x63,
       .dst_reg = BPF_REG_10,
       .src_reg = BPF_REG_1,
-      .off     = -16,
+      .off     = -4,
       .imm     = 0,
   };
   instructions[18] = (struct bpf_insn) {
@@ -627,7 +627,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .dst_reg = BPF_REG_2,
       .src_reg = BPF_REG_0,
       .off     = 0,
-      .imm     = -16,
+      .imm     = -4,
   };
   instructions[22] = (struct bpf_insn) {
       .code    = 0x85,
@@ -661,7 +661,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .code    = 0x63,
       .dst_reg = BPF_REG_10,
       .src_reg = BPF_REG_0,
-      .off     = -4,
+      .off     = -16,
       .imm     = 0,
   };
   instructions[27] = (struct bpf_insn) {
@@ -675,7 +675,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .code    = 0x63,
       .dst_reg = BPF_REG_10,
       .src_reg = BPF_REG_1,
-      .off     = -20,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[29] = (struct bpf_insn) {
@@ -704,7 +704,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .dst_reg = BPF_REG_2,
       .src_reg = BPF_REG_0,
       .off     = 0,
-      .imm     = -4,
+      .imm     = -16,
   };
   instructions[33] = (struct bpf_insn) {
       .code    = 0xbf,
@@ -718,7 +718,7 @@ void generate_execve_entry(struct bpf_insn instructions[], int progeny_pids_fd) 
       .dst_reg = BPF_REG_3,
       .src_reg = BPF_REG_0,
       .off     = 0,
-      .imm     = -20,
+      .imm     = -8,
   };
   instructions[35] = (struct bpf_insn) {
       .code    = 0xb7,
@@ -967,15 +967,15 @@ void generate_trace_entry_tid(struct bpf_insn instructions[], int tid, int infot
   instructions[20] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_7,
-      .off     = -8,
+      .src_reg = BPF_REG_6,
+      .off     = -32,
       .imm     = 0,
   };
   instructions[21] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_6,
-      .off     = -32,
+      .src_reg = BPF_REG_7,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[22] = (struct bpf_insn) {
@@ -1215,15 +1215,15 @@ void generate_trace_entry_pid(struct bpf_insn instructions[], int pid, int infot
   instructions[23] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_7,
-      .off     = -8,
+      .src_reg = BPF_REG_6,
+      .off     = -32,
       .imm     = 0,
   };
   instructions[24] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_6,
-      .off     = -32,
+      .src_reg = BPF_REG_7,
+      .off     = -8,
       .imm     = 0,
   };
   instructions[25] = (struct bpf_insn) {
@@ -1736,15 +1736,15 @@ void generate_trace_return(struct bpf_insn instructions[], int infotmp_fd, int e
   instructions[62] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_7,
-      .off     = -296,
+      .src_reg = BPF_REG_1,
+      .off     = -304,
       .imm     = 0,
   };
   instructions[63] = (struct bpf_insn) {
       .code    = 0x7b,
       .dst_reg = BPF_REG_10,
-      .src_reg = BPF_REG_1,
-      .off     = -304,
+      .src_reg = BPF_REG_7,
+      .off     = -296,
       .imm     = 0,
   };
   instructions[64] = (struct bpf_insn) {

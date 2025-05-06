@@ -112,14 +112,14 @@ pub fn generate_trace_entry(instructions: &mut [libbpf::bpf_insn], infotmp_fd: &
   };
   instructions[16] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
-      off: -8,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -32,
       imm: 0,
   };
   instructions[17] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
-      off: -32,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -8,
       imm: 0,
   };
   instructions[18] = libbpf::bpf_insn {
@@ -337,14 +337,14 @@ pub fn generate_trace_entry_progeny(instructions: &mut [libbpf::bpf_insn], infot
   };
   instructions[25] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
-      off: -8,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -32,
       imm: 0,
   };
   instructions[26] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
-      off: -32,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -8,
       imm: 0,
   };
   instructions[27] = libbpf::bpf_insn {
@@ -425,7 +425,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
   instructions[2] = libbpf::bpf_insn {
       code: 0x63,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
-      off: -4,
+      off: -8,
       imm: 0,
   };
   instructions[3] = libbpf::bpf_insn {
@@ -492,7 +492,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
       code: 0x7,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 0),
       off: 0,
-      imm: -4,
+      imm: -8,
   };
   instructions[14] = libbpf::bpf_insn {
       code: 0xb7,
@@ -509,13 +509,13 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
   instructions[16] = libbpf::bpf_insn {
       code: 0x61,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(1, 10),
-      off: -4,
+      off: -8,
       imm: 0,
   };
   instructions[17] = libbpf::bpf_insn {
       code: 0x63,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
-      off: -16,
+      off: -4,
       imm: 0,
   };
   instructions[18] = libbpf::bpf_insn {
@@ -540,7 +540,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
       code: 0x7,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 0),
       off: 0,
-      imm: -16,
+      imm: -4,
   };
   instructions[22] = libbpf::bpf_insn {
       code: 0x85,
@@ -569,7 +569,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
   instructions[26] = libbpf::bpf_insn {
       code: 0x63,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 0),
-      off: -4,
+      off: -16,
       imm: 0,
   };
   instructions[27] = libbpf::bpf_insn {
@@ -581,7 +581,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
   instructions[28] = libbpf::bpf_insn {
       code: 0x63,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
-      off: -20,
+      off: -8,
       imm: 0,
   };
   instructions[29] = libbpf::bpf_insn {
@@ -606,7 +606,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
       code: 0x7,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(2, 0),
       off: 0,
-      imm: -4,
+      imm: -16,
   };
   instructions[33] = libbpf::bpf_insn {
       code: 0xbf,
@@ -618,7 +618,7 @@ pub fn generate_execve_entry(instructions: &mut [libbpf::bpf_insn], progeny_pids
       code: 0x7,
       _bitfield_1: libbpf::bpf_insn::new_bitfield_1(3, 0),
       off: 0,
-      imm: -20,
+      imm: -8,
   };
   instructions[35] = libbpf::bpf_insn {
       code: 0xb7,
@@ -832,14 +832,14 @@ pub fn generate_trace_entry_tid(instructions: &mut [libbpf::bpf_insn], tid: i32,
   };
   instructions[20] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
-      off: -8,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -32,
       imm: 0,
   };
   instructions[21] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
-      off: -32,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -8,
       imm: 0,
   };
   instructions[22] = libbpf::bpf_insn {
@@ -1045,14 +1045,14 @@ pub fn generate_trace_entry_pid(instructions: &mut [libbpf::bpf_insn], pid: i32,
   };
   instructions[23] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
-      off: -8,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
+      off: -32,
       imm: 0,
   };
   instructions[24] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 6),
-      off: -32,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -8,
       imm: 0,
   };
   instructions[25] = libbpf::bpf_insn {
@@ -1492,14 +1492,14 @@ pub fn generate_trace_return(instructions: &mut [libbpf::bpf_insn], infotmp_fd: 
   };
   instructions[62] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
-      off: -296,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
+      off: -304,
       imm: 0,
   };
   instructions[63] = libbpf::bpf_insn {
       code: 0x7b,
-      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 1),
-      off: -304,
+      _bitfield_1: libbpf::bpf_insn::new_bitfield_1(10, 7),
+      off: -296,
       imm: 0,
   };
   instructions[64] = libbpf::bpf_insn {
